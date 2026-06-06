@@ -1,0 +1,1928 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HitbotOS Store · 设计规范</title>
+    <style>
+      /* ============================================================
+   共享设计 Token（商城在 OS 端和官网前台共用一套 token，
+   靠 .theme-light / .theme-dark 切换视觉）
+   ============================================================ */
+      :root {
+        /* —— 品牌色（跨两端统一） —— */
+        --brand-500: #bd1c22; /* 主品牌红 */
+        --brand-600: #b71c1c; /* 官网用（更接近 #C00000） */
+        --brand-400: #d22a30; /* hover */
+        --brand-100: #fbe7e8; /* 极浅（背景） */
+        --brand-50: #fcefee;
+        --brand-soft: rgba(189, 28, 34, 0.1); /* 选中态 */
+        --brand-soft-2: rgba(189, 28, 34, 0.22); /* 强选中 */
+
+        /* —— 中性色 —— */
+        --neutral-1000: #000000;
+        --neutral-900: #1a1a1a;
+        --neutral-800: #2b2b2f;
+        --neutral-700: #3a3a3a;
+        --neutral-600: #555555;
+        --neutral-500: #777777;
+        --neutral-400: #999999;
+        --neutral-300: #c8c5ba; /* 滑块 thumb */
+        --neutral-200: #d5d5d5;
+        --neutral-100: #ebebeb;
+        --neutral-50: #f7f7f8;
+        --neutral-0: #ffffff;
+
+        /* —— 状态色 —— */
+        --state-blue: #3c7eff;
+        --state-green: #42d987; /* OS 端绿 */
+        --state-green-strong: #7be0a6; /* OS 端"运行中"前景色 */
+        --state-yellow: #f2b84b; /* OS 端黄 */
+        --state-yellow-strong: #ffd37a; /* OS 端"编译中" */
+        --state-danger: #ff7478; /* OS 端 danger */
+        --state-red-soft: rgba(255, 116, 120, 0.16);
+
+        /* —— 字号 —— */
+        --fs-xs: 10px;
+        --fs-sm: 11px;
+        --fs-md: 12px; /* OS 端基础字号 */
+        --fs-lg: 14px;
+        --fs-xl: 16px;
+        --fs-2xl: 20px;
+        --fs-3xl: 24px;
+        --fs-4xl: 32px;
+        --fs-5xl: 48px; /* 官网首页超大标题 */
+
+        /* —— 行高 —— */
+        --lh-tight: 1;
+        --lh-base: 1.45;
+
+        /* —— 间距（4 的倍数）—— */
+        --sp-1: 4px;
+        --sp-2: 8px;
+        --sp-3: 12px;
+        --sp-4: 16px;
+        --sp-5: 24px;
+        --sp-6: 32px;
+        --sp-7: 48px;
+        --sp-8: 64px;
+
+        /* —— 圆角 —— */
+        --r-xs: 2px;
+        --r-sm: 3px;
+        --r-md: 4px;
+        --r-lg: 6px;
+        --r-xl: 8px;
+        --r-pill: 999px;
+
+        /* —— 阴影（仅用于浮动面板/弹窗） —— */
+        --shadow-floating: 0 14px 34px rgba(0, 0, 0, 0.24);
+        --shadow-floating-strong: 0 22px 52px rgba(0, 0, 0, 0.48), 0 6px 18px rgba(0, 0, 0, 0.28);
+        --shadow-popover: 0 18px 42px rgba(0, 0, 0, 0.44), 0 4px 14px rgba(0, 0, 0, 0.24);
+        --shadow-light: 0 10px 30px rgba(16, 18, 22, 0.14);
+
+        /* —— 控件尺寸 —— */
+        --ctrl-h-sm: 24px;
+        --ctrl-h-md: 30px;
+        --ctrl-h-lg: 36px;
+        --ctrl-h-xl: 48px;
+        --toolbar-target: 48px;
+
+        /* —— 字体 —— */
+        --font-family-sans:
+          'Segoe UI', Tahoma, Geneva, Verdana, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        --font-family-display:
+          'PangMenZhengDaoBiaoTiTiMianFeiBan-2', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      }
+
+      /* ============================================================
+   主题：light（官网营销/前台） vs dark（OS 端工具）
+   通过根节点 .theme-light / .theme-dark 切换
+   ============================================================ */
+      .theme-light {
+        --bg-app: var(--neutral-0);
+        --bg-surface: var(--neutral-50);
+        --bg-elevated: var(--neutral-0);
+        --bg-control: var(--neutral-100);
+        --bg-control-hover: var(--neutral-200);
+        --bg-control-active: var(--neutral-300);
+        --bg-shell: var(--neutral-50);
+        --bg-statusbar: var(--neutral-100);
+
+        --text-strong: var(--neutral-1000);
+        --text: var(--neutral-800);
+        --text-muted: var(--neutral-500);
+        --text-disabled: var(--neutral-300);
+
+        --border-default: transparent; /* 零边框 */
+        --divider: var(--neutral-100);
+      }
+
+      .theme-dark {
+        --bg-app: #242424;
+        --bg-surface: #2b2b2b;
+        --bg-elevated: #2f2f2f;
+        --bg-control: #3a3a3a;
+        --bg-control-hover: #454545;
+        --bg-control-active: #505050;
+        --bg-shell: #f7f7f8; /* top menu 仍是亮色 */
+        --bg-statusbar: #f0f0f0;
+
+        --text-strong: #ffffff;
+        --text: #dddddd;
+        --text-muted: #a5a5a5;
+        --text-disabled: #777777;
+
+        --border-default: transparent;
+        --divider: rgba(255, 255, 255, 0.08);
+      }
+
+      /* ============================================================
+   基础
+   ============================================================ */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        font-family: var(--font-family-sans);
+        font-size: var(--fs-md);
+        line-height: var(--lh-base);
+        color: var(--text-strong);
+      }
+      body {
+        padding: 0;
+        background: var(--bg-app);
+      }
+      .theme-light body,
+      body.theme-light {
+        background: var(--neutral-100);
+        color: var(--neutral-900);
+      }
+      .theme-dark body,
+      body.theme-dark {
+        background: var(--bg-app);
+        color: var(--text-strong);
+      }
+
+      a {
+        color: var(--brand-500);
+        text-decoration: none;
+      }
+      a:hover {
+        color: var(--brand-400);
+      }
+
+      code,
+      pre {
+        font-family: 'SF Mono', Menlo, monospace;
+        font-size: 12px;
+      }
+      code {
+        background: rgba(0, 0, 0, 0.06);
+        padding: 1px 6px;
+        border-radius: 3px;
+      }
+      pre {
+        background: #1a1a1a;
+        color: #f0f0f0;
+        padding: 16px;
+        border-radius: var(--r-md);
+        overflow-x: auto;
+        line-height: 1.6;
+      }
+      pre code {
+        background: transparent;
+        padding: 0;
+        color: #f0f0f0;
+      }
+
+      h1 {
+        font-size: var(--fs-3xl);
+        font-weight: 600;
+        letter-spacing: -0.5px;
+      }
+      h2 {
+        font-size: var(--fs-2xl);
+        font-weight: 600;
+        margin-bottom: var(--sp-3);
+      }
+      h3 {
+        font-size: var(--fs-lg);
+        font-weight: 600;
+        margin-bottom: var(--sp-2);
+      }
+      p {
+        color: var(--neutral-700);
+      }
+
+      /* ============================================================
+   顶部导航（规范页自身的导航）
+   ============================================================ */
+      .spec-nav {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: var(--neutral-1000);
+        color: var(--neutral-0);
+        padding: var(--sp-3) var(--sp-5);
+        display: flex;
+        align-items: center;
+        gap: var(--sp-5);
+        box-shadow: var(--shadow-floating);
+      }
+      .spec-nav .brand {
+        font-weight: 600;
+        font-size: var(--fs-lg);
+        color: var(--brand-500);
+      }
+      .spec-nav .meta {
+        color: var(--neutral-300);
+        font-size: var(--fs-sm);
+      }
+      .spec-nav nav {
+        display: flex;
+        gap: var(--sp-4);
+        margin-left: auto;
+        flex-wrap: wrap;
+      }
+      .spec-nav nav a {
+        color: var(--neutral-0);
+        font-size: var(--fs-sm);
+        padding: 4px 8px;
+        border-radius: var(--r-sm);
+      }
+      .spec-nav nav a:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      /* ============================================================
+   章节布局
+   ============================================================ */
+      .spec-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: var(--sp-6) var(--sp-5);
+      }
+
+      .spec-hero {
+        background: linear-gradient(135deg, #1a1a1a 0%, #2b2b2b 100%);
+        color: var(--neutral-0);
+        padding: var(--sp-7) var(--sp-5);
+        border-radius: var(--r-xl);
+        margin-bottom: var(--sp-6);
+      }
+      .spec-hero h1 {
+        color: var(--neutral-0);
+        margin-bottom: var(--sp-3);
+      }
+      .spec-hero p {
+        color: rgba(255, 255, 255, 0.72);
+        font-size: var(--fs-lg);
+      }
+      .spec-hero .meta-row {
+        display: flex;
+        gap: var(--sp-5);
+        margin-top: var(--sp-4);
+        flex-wrap: wrap;
+      }
+      .spec-hero .meta-row span {
+        font-size: var(--fs-sm);
+        color: rgba(255, 255, 255, 0.56);
+      }
+      .spec-hero .meta-row strong {
+        color: var(--brand-500);
+      }
+
+      section {
+        background: var(--neutral-0);
+        padding: var(--sp-6);
+        border-radius: var(--r-xl);
+        margin-bottom: var(--sp-5);
+      }
+      .theme-dark section {
+        background: var(--bg-elevated);
+        color: var(--text);
+      }
+      section > header {
+        margin-bottom: var(--sp-5);
+      }
+      section > header h2 {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+      }
+      section > header h2 .num {
+        color: var(--brand-500);
+        font-size: var(--fs-xl);
+        font-weight: 400;
+      }
+      section > header .desc {
+        color: var(--neutral-500);
+        font-size: var(--fs-sm);
+        margin-top: var(--sp-1);
+      }
+      .theme-dark section > header .desc {
+        color: var(--text-muted);
+      }
+
+      .sub-section {
+        margin-top: var(--sp-5);
+      }
+      .sub-section h3 {
+        padding-bottom: var(--sp-2);
+        border-bottom: 1px solid var(--neutral-100);
+        margin-bottom: var(--sp-3);
+      }
+      .theme-dark .sub-section h3 {
+        border-bottom-color: var(--divider);
+        color: var(--text-strong);
+      }
+      .sub-section h4 {
+        font-size: var(--fs-md);
+        color: var(--neutral-600);
+        margin-bottom: var(--sp-2);
+      }
+      .theme-dark .sub-section h4 {
+        color: var(--text-muted);
+      }
+
+      /* ============================================================
+   颜色色板
+   ============================================================ */
+      .color-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: var(--sp-3);
+      }
+      .color-swatch {
+        background: var(--neutral-0);
+        border-radius: var(--r-lg);
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      }
+      .color-swatch .swatch {
+        height: 80px;
+        display: flex;
+        align-items: flex-end;
+        padding: var(--sp-2);
+        color: var(--neutral-0);
+        font-size: var(--fs-xs);
+        font-family: 'SF Mono', Menlo, monospace;
+      }
+      .color-swatch .info {
+        padding: var(--sp-3);
+      }
+      .color-swatch .info .name {
+        font-weight: 600;
+        font-size: var(--fs-sm);
+      }
+      .color-swatch .info .meta {
+        color: var(--neutral-500);
+        font-size: var(--fs-xs);
+        margin-top: 2px;
+        font-family: 'SF Mono', Menlo, monospace;
+      }
+
+      /* ============================================================
+   字号/间距/圆角 演示
+   ============================================================ */
+      .token-list {
+        display: grid;
+        gap: var(--sp-2);
+      }
+      .token-row {
+        display: grid;
+        grid-template-columns: 100px 1fr 200px;
+        align-items: center;
+        gap: var(--sp-4);
+        padding: var(--sp-3);
+        background: var(--neutral-50);
+        border-radius: var(--r-md);
+      }
+      .token-row .label {
+        font-family: 'SF Mono', Menlo, monospace;
+        font-size: var(--fs-sm);
+        color: var(--brand-500);
+        font-weight: 600;
+      }
+      .token-row .value {
+        color: var(--neutral-800);
+      }
+      .token-row .meta {
+        color: var(--neutral-500);
+        font-size: var(--fs-xs);
+        font-family: 'SF Mono', Menlo, monospace;
+        text-align: right;
+      }
+
+      .fs-demo {
+        display: flex;
+        align-items: baseline;
+        gap: var(--sp-3);
+      }
+      .fs-demo .label {
+        color: var(--neutral-500);
+        font-size: var(--fs-sm);
+        min-width: 80px;
+      }
+
+      /* ============================================================
+   主题对比区（关键创新点）
+   ============================================================ */
+      .theme-compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--sp-4);
+        margin-top: var(--sp-4);
+      }
+      .theme-compare .panel {
+        border-radius: var(--r-lg);
+        overflow: hidden;
+      }
+      .theme-compare .panel-label {
+        padding: var(--sp-2) var(--sp-3);
+        font-size: var(--fs-sm);
+        font-weight: 600;
+      }
+      .theme-compare .panel.light .panel-label {
+        background: var(--neutral-50);
+        color: var(--neutral-800);
+      }
+      .theme-compare .panel.dark .panel-label {
+        background: #1a1a1a;
+        color: var(--neutral-0);
+      }
+      .theme-compare .panel-body {
+        padding: var(--sp-5);
+      }
+      .theme-compare .panel.light .panel-body {
+        background: var(--neutral-0);
+        color: var(--neutral-900);
+      }
+      .theme-compare .panel.dark .panel-body {
+        background: var(--bg-app);
+        color: var(--text);
+      }
+
+      /* ============================================================
+   按钮 4 套
+   ============================================================ */
+      .btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--sp-3);
+        align-items: center;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sp-2);
+        min-height: var(--ctrl-h-md);
+        padding: 0 var(--sp-4);
+        font-family: inherit;
+        font-size: var(--fs-md);
+        line-height: var(--lh-tight);
+        border: 0;
+        border-radius: var(--r-md);
+        cursor: pointer;
+        transition:
+          background-color 0.14s ease,
+          color 0.14s ease,
+          transform 0.14s ease,
+          opacity 0.14s ease;
+      }
+      .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.52;
+      }
+
+      .btn-primary {
+        background: var(--brand-500);
+        color: var(--neutral-0);
+      }
+      .btn-primary:hover {
+        background: var(--brand-400);
+      }
+      .theme-light .btn-primary {
+        background: var(--brand-600);
+      }
+
+      .btn-secondary {
+        background: var(--bg-control);
+        color: var(--text);
+      }
+      .btn-secondary:hover {
+        background: var(--bg-control-hover);
+        color: var(--text-strong);
+      }
+
+      .btn-subtle {
+        background: transparent;
+        color: var(--text-muted);
+      }
+      .btn-subtle:hover {
+        background: var(--bg-control-hover);
+        color: var(--text-strong);
+      }
+
+      .btn-icon {
+        width: var(--ctrl-h-md);
+        min-width: var(--ctrl-h-md);
+        padding: 0;
+        justify-content: center;
+        background: transparent;
+        color: var(--text-muted);
+        border-radius: var(--r-md);
+      }
+      .btn-icon:hover {
+        background: var(--bg-control-hover);
+        color: var(--text-strong);
+      }
+      .btn-icon.active {
+        background: var(--brand-500);
+        color: var(--neutral-0);
+      }
+
+      .btn-lg {
+        min-height: var(--ctrl-h-lg);
+        padding: 0 var(--sp-5);
+        font-size: var(--fs-lg);
+      }
+      .btn-sm {
+        min-height: var(--ctrl-h-sm);
+        padding: 0 var(--sp-3);
+        font-size: var(--fs-sm);
+      }
+      .btn-pill {
+        border-radius: var(--r-pill);
+      }
+
+      /* ============================================================
+   表单（零边框 + 下划线 或 暗色填充）
+   ============================================================ */
+      .field-group {
+        display: grid;
+        gap: var(--sp-4);
+        max-width: 400px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-1);
+      }
+      .field label {
+        font-size: var(--fs-sm);
+        color: var(--text-muted);
+      }
+      .field label .req {
+        color: var(--brand-500);
+        margin-left: 2px;
+      }
+
+      /* 官网前台：下划线零边框 */
+      .theme-light .input,
+      .theme-light .select,
+      .theme-light .textarea {
+        background: transparent;
+        border: 0;
+        border-bottom: 1px solid var(--neutral-300);
+        border-radius: 0;
+        padding: 8px 0;
+        font-family: inherit;
+        font-size: var(--fs-md);
+        color: var(--neutral-900);
+        outline: none;
+        transition: border-color 0.14s ease;
+      }
+      .theme-light .input:focus,
+      .theme-light .select:focus,
+      .theme-light .textarea:focus {
+        border-bottom-color: var(--brand-500);
+      }
+      .theme-light .input::placeholder {
+        color: var(--neutral-400);
+      }
+
+      /* OS 端：暗色填充 */
+      .theme-dark .input,
+      .theme-dark .select,
+      .theme-dark .textarea {
+        background: var(--bg-control);
+        border: 0;
+        border-radius: var(--r-md);
+        padding: 0 var(--sp-3);
+        min-height: var(--ctrl-h-md);
+        color: var(--text);
+        font-family: inherit;
+        font-size: var(--fs-md);
+        outline: none;
+        transition:
+          background-color 0.14s ease,
+          color 0.14s ease;
+      }
+      .theme-dark .input:focus,
+      .theme-dark .select:focus {
+        background: var(--bg-control-active);
+        color: var(--text-strong);
+      }
+
+      /* ============================================================
+   卡片
+   ============================================================ */
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: var(--sp-4);
+      }
+      .card {
+        background: var(--bg-elevated);
+        border-radius: var(--r-lg);
+        padding: var(--sp-4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        transition:
+          transform 0.14s ease,
+          box-shadow 0.14s ease;
+      }
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+      }
+      .card .icon {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--brand-soft);
+        color: var(--brand-500);
+        border-radius: var(--r-md);
+        font-size: var(--fs-2xl);
+        margin-bottom: var(--sp-3);
+      }
+      .card .title {
+        font-weight: 600;
+        font-size: var(--fs-md);
+        margin-bottom: var(--sp-1);
+      }
+      .card .meta {
+        color: var(--text-muted);
+        font-size: var(--fs-sm);
+      }
+
+      /* 设备库卡片（OS 端 3 列网格） */
+      .device-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: var(--sp-3);
+        background: var(--bg-control);
+        border-radius: var(--r-md);
+        text-align: center;
+        transition: background-color 0.14s ease;
+        cursor: pointer;
+      }
+      .device-card:hover {
+        background: var(--bg-control-hover);
+      }
+      .device-card.selected {
+        background: var(--brand-soft-2);
+        color: var(--text-strong);
+      }
+      .device-card .device-icon {
+        width: 36px;
+        height: 36px;
+        color: var(--brand-500);
+        font-size: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: var(--sp-2);
+      }
+      .device-card .device-name {
+        font-size: var(--fs-sm);
+        color: var(--text);
+      }
+      .device-card.selected .device-name {
+        color: var(--text-strong);
+      }
+
+      .device-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--sp-2);
+      }
+
+      /* ============================================================
+   状态色（徽标/标签）
+   ============================================================ */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: var(--r-md);
+        font-size: var(--fs-xs);
+        line-height: var(--lh-tight);
+      }
+      .badge.running {
+        background: rgba(35, 195, 112, 0.16);
+        color: var(--state-green-strong);
+      }
+      .badge.compiling {
+        background: rgba(255, 183, 77, 0.16);
+        color: var(--state-yellow-strong);
+      }
+      .badge.downloading {
+        background: rgba(60, 126, 255, 0.16);
+        color: #9fc8ff;
+      }
+      .badge.idle {
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--neutral-300);
+      }
+      .badge.error {
+        background: var(--brand-500);
+        color: var(--neutral-0);
+      }
+      .badge.cart-0 {
+        background: var(--neutral-100);
+        color: var(--neutral-500);
+      }
+      .badge.cart-active {
+        background: var(--brand-500);
+        color: var(--neutral-0);
+      }
+      .badge.in-stock {
+        background: rgba(35, 195, 112, 0.1);
+        color: #2c7a4f;
+      }
+      .badge.out-of-stock {
+        background: var(--neutral-100);
+        color: var(--neutral-500);
+      }
+      .badge.on-sale {
+        background: var(--brand-soft);
+        color: var(--brand-500);
+      }
+
+      /* ============================================================
+   顶部菜单条（mock，演示两种主题的菜单）
+   ============================================================ */
+      .mock-menu {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-3);
+        padding: var(--sp-2) var(--sp-4);
+        border-radius: var(--r-md);
+        font-size: var(--fs-sm);
+        min-height: var(--ctrl-h-xl);
+      }
+      .mock-menu.light {
+        background: var(--neutral-50);
+        color: var(--neutral-800);
+        border-bottom: 1px solid var(--neutral-100);
+      }
+      .mock-menu.dark {
+        background: var(--bg-shell);
+        color: var(--neutral-800);
+        border-bottom: 1px solid var(--neutral-100);
+      }
+      .mock-menu .logo {
+        font-weight: 600;
+        color: var(--brand-500);
+      }
+      .mock-menu .nav {
+        display: flex;
+        gap: var(--sp-4);
+      }
+      .mock-menu .nav a {
+        color: var(--neutral-800);
+      }
+      .mock-menu .nav a:hover {
+        color: var(--brand-500);
+      }
+      .mock-menu .actions {
+        margin-left: auto;
+        display: flex;
+        gap: var(--sp-2);
+        align-items: center;
+      }
+      .mock-menu .cart-icon {
+        position: relative;
+      }
+      .mock-menu .cart-icon .count {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        background: var(--brand-500);
+        color: white;
+        font-size: 10px;
+        padding: 1px 5px;
+        border-radius: var(--r-pill);
+        line-height: 1;
+      }
+
+      /* ============================================================
+   购物车下拉（mock）
+   ============================================================ */
+      .cart-dropdown {
+        position: relative;
+        background: var(--bg-elevated);
+        border-radius: var(--r-lg);
+        padding: var(--sp-4);
+        min-width: 280px;
+        box-shadow: var(--shadow-light);
+      }
+      .theme-dark .cart-dropdown {
+        box-shadow: var(--shadow-popover);
+      }
+      .cart-dropdown .item {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        padding: var(--sp-2) 0;
+      }
+      .cart-dropdown .item .name {
+        flex: 1;
+        font-size: var(--fs-sm);
+      }
+      .cart-dropdown .item .qty {
+        color: var(--text-muted);
+        font-size: var(--fs-xs);
+      }
+
+      /* ============================================================
+   阴影演示
+   ============================================================ */
+      .shadow-demo {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: var(--sp-4);
+        padding: var(--sp-4);
+      }
+      .shadow-card {
+        padding: var(--sp-4);
+        background: var(--neutral-0);
+        border-radius: var(--r-lg);
+        text-align: center;
+      }
+      .shadow-card .label {
+        font-size: var(--fs-xs);
+        color: var(--neutral-500);
+        font-family: 'SF Mono', Menlo, monospace;
+        margin-top: var(--sp-2);
+      }
+      .shadow-card.none {
+        box-shadow: none;
+      }
+      .shadow-card.light {
+        box-shadow: var(--shadow-light);
+      }
+      .shadow-card.floating {
+        box-shadow: var(--shadow-floating);
+      }
+      .shadow-card.popover {
+        box-shadow: var(--shadow-popover);
+      }
+      .shadow-card.floating-strong {
+        box-shadow: var(--shadow-floating-strong);
+      }
+
+      /* ============================================================
+   工具类
+   ============================================================ */
+      .muted {
+        color: var(--neutral-500);
+      }
+      .text-strong {
+        color: var(--text-strong);
+      }
+      .divider {
+        height: 1px;
+        background: var(--divider);
+        margin: var(--sp-4) 0;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: var(--r-pill);
+        font-size: var(--fs-xs);
+        background: var(--brand-soft);
+        color: var(--brand-500);
+      }
+
+      /* 整页切换主题 */
+      .theme-switcher {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        display: flex;
+        gap: 4px;
+        background: var(--neutral-1000);
+        padding: 4px;
+        border-radius: var(--r-pill);
+        box-shadow: var(--shadow-floating-strong);
+        z-index: 1000;
+      }
+      .theme-switcher button {
+        background: transparent;
+        color: var(--neutral-300);
+        border: 0;
+        padding: 6px 14px;
+        border-radius: var(--r-pill);
+        font-size: var(--fs-sm);
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .theme-switcher button.active {
+        background: var(--brand-500);
+        color: var(--neutral-0);
+      }
+      .theme-switcher button:hover:not(.active) {
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--neutral-0);
+      }
+
+      /* 响应式 */
+      @media (max-width: 800px) {
+        .theme-compare {
+          grid-template-columns: 1fr;
+        }
+        .token-row {
+          grid-template-columns: 1fr;
+        }
+        .spec-nav nav {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body class="theme-light">
+    <!-- 顶部导航 -->
+    <header class="spec-nav">
+      <div class="brand">HITBOT Store</div>
+      <div class="meta">设计规范 v0.1</div>
+      <nav>
+        <a href="#colors">颜色</a>
+        <a href="#typography">字号</a>
+        <a href="#spacing">间距</a>
+        <a href="#radius">圆角</a>
+        <a href="#shadow">阴影</a>
+        <a href="#buttons">按钮</a>
+        <a href="#forms">表单</a>
+        <a href="#cards">卡片</a>
+        <a href="#badges">状态</a>
+        <a href="#menu">顶部菜单</a>
+        <a href="#cart">购物车</a>
+        <a href="#compare">双主题对比</a>
+      </nav>
+    </header>
+
+    <!-- Hero -->
+    <div class="spec-container">
+      <div class="spec-hero">
+        <h1>HitbotOS Store · 设计规范</h1>
+        <p>统一 token + 组件库，确保官网商城、OS 端嵌入、账号与订单工作台视觉一致。</p>
+        <div class="meta-row">
+          <span>核心色 <strong>#BD1C22</strong></span>
+          <span>主字体 <strong>Segoe UI</strong>（营销用庞门正道）</span>
+          <span>基础字号 <strong>12px</strong></span>
+          <span>圆角 <strong>4-8px</strong></span>
+          <span>边框 <strong>基本不用</strong></span>
+        </div>
+      </div>
+
+      <!-- 1. 颜色 token -->
+      <section id="colors">
+        <header>
+          <h2><span class="num">01</span> 颜色</h2>
+          <div class="desc">品牌色跨两端统一；中性色和状态色按主题切换</div>
+        </header>
+
+        <div class="sub-section">
+          <h3>品牌色（共享）</h3>
+          <div class="color-grid">
+            <div class="color-swatch">
+              <div class="swatch" style="background: #bd1c22">#BD1C22</div>
+              <div class="info">
+                <div class="name">brand-500 · OS 主色</div>
+                <div class="meta">--brand-500</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #b71c1c">#B71C1C</div>
+              <div class="info">
+                <div class="name">brand-600 · 官网用</div>
+                <div class="meta">--brand-600</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #d22a30">#d22a30</div>
+              <div class="info">
+                <div class="name">brand-400 · hover</div>
+                <div class="meta">--brand-400</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: rgba(189, 28, 34, 0.22)">rgba(...)</div>
+              <div class="info">
+                <div class="name">brand-soft-2 · 强选中</div>
+                <div class="meta">--brand-soft-2</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: rgba(189, 28, 34, 0.1)">rgba(...)</div>
+              <div class="info">
+                <div class="name">brand-soft · 弱选中</div>
+                <div class="meta">--brand-soft</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #fbe7e8; color: #1a1a1a">#FBE7E8</div>
+              <div class="info">
+                <div class="name">brand-100 · 极浅</div>
+                <div class="meta">--brand-100</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <h3>中性色（共享）</h3>
+          <div class="color-grid">
+            <div class="color-swatch">
+              <div
+                class="swatch"
+                style="background: #ffffff; color: #1a1a1a; border: 1px solid #ebebeb"
+              >
+                #FFFFFF
+              </div>
+              <div class="info">
+                <div class="name">neutral-0</div>
+                <div class="meta">--neutral-0</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #f7f7f8; color: #1a1a1a">#F7F7F8</div>
+              <div class="info">
+                <div class="name">neutral-50 · 浅壳</div>
+                <div class="meta">--neutral-50</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #ebebeb; color: #1a1a1a">#EBEBEB</div>
+              <div class="info">
+                <div class="name">neutral-100</div>
+                <div class="meta">--neutral-100</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #d5d5d5; color: #1a1a1a">#D5D5D5</div>
+              <div class="info">
+                <div class="name">neutral-200</div>
+                <div class="meta">--neutral-200</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #999999">#999999</div>
+              <div class="info">
+                <div class="name">neutral-400 · 提示</div>
+                <div class="meta">--neutral-400</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #555555">#555555</div>
+              <div class="info">
+                <div class="name">neutral-600</div>
+                <div class="meta">--neutral-600</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #1a1a1a">#1A1A1A</div>
+              <div class="info">
+                <div class="name">neutral-900 · 主文字</div>
+                <div class="meta">--neutral-900</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #000000">#000000</div>
+              <div class="info">
+                <div class="name">neutral-1000</div>
+                <div class="meta">--neutral-1000</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <h3>OS 端深色背景（仅 dark 主题用）</h3>
+          <div class="color-grid">
+            <div class="color-swatch">
+              <div class="swatch" style="background: #242424">#242424</div>
+              <div class="info">
+                <div class="name">bg-app</div>
+                <div class="meta">--bg-app</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #2b2b2b">#2b2b2b</div>
+              <div class="info">
+                <div class="name">bg-workspace</div>
+                <div class="meta">--bg-surface</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #2f2f2f">#2f2f2f</div>
+              <div class="info">
+                <div class="name">bg-window</div>
+                <div class="meta">--bg-elevated</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #3a3a3a">#3a3a3a</div>
+              <div class="info">
+                <div class="name">bg-control</div>
+                <div class="meta">--bg-control</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #454545">#454545</div>
+              <div class="info">
+                <div class="name">bg-control-hover</div>
+                <div class="meta">--bg-control-hover</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #505050">#505050</div>
+              <div class="info">
+                <div class="name">bg-control-active</div>
+                <div class="meta">--bg-control-active</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <h3>状态色</h3>
+          <div class="color-grid">
+            <div class="color-swatch">
+              <div class="swatch" style="background: #42d987">#42d987</div>
+              <div class="info">
+                <div class="name">绿 · 成功</div>
+                <div class="meta">--state-green</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #7be0a6">#7BE0A6</div>
+              <div class="info">
+                <div class="name">绿·前景 · OS 端"运行中"</div>
+                <div class="meta">--state-green-strong</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #3c7eff">#3C7EFF</div>
+              <div class="info">
+                <div class="name">蓝 · 信息</div>
+                <div class="meta">--state-blue</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #f2b84b">#f2b84b</div>
+              <div class="info">
+                <div class="name">黄 · 警告</div>
+                <div class="meta">--state-yellow</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #ff7478">#ff7478</div>
+              <div class="info">
+                <div class="name">红·浅 · 危险</div>
+                <div class="meta">--state-danger</div>
+              </div>
+            </div>
+            <div class="color-swatch">
+              <div class="swatch" style="background: #bd1c22">#BD1C22</div>
+              <div class="info">
+                <div class="name">红 · 错误徽标</div>
+                <div class="meta">复用 brand-500</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. 字号 token -->
+      <section id="typography">
+        <header>
+          <h2><span class="num">02</span> 字号</h2>
+          <div class="desc">5 档基础字号 + 2 档展示字号（营销头图用）</div>
+        </header>
+        <div class="token-list">
+          <div class="token-row">
+            <div class="label">--fs-xs</div>
+            <div class="value">
+              <span class="fs-demo"
+                ><span class="label">10px</span><span style="font-size: 10px">12 件商品</span></span
+              >
+            </div>
+            <div class="meta">徽标 / 角标</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--fs-sm</div>
+            <div class="value">
+              <span class="fs-demo"
+                ><span class="label">11px</span
+                ><span style="font-size: 11px">默认说明文字</span></span
+              >
+            </div>
+            <div class="meta">次要文字 / OS 端</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--fs-md</div>
+            <div class="value">
+              <span class="fs-demo"
+                ><span class="label">12px</span
+                ><span style="font-size: 12px">正文基础（OS 端默认）</span></span
+              >
+            </div>
+            <div class="meta">OS 端基线 / 表单</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--fs-lg</div>
+            <div class="value">
+              <span class="fs-demo"
+                ><span class="label">14px</span
+                ><span style="font-size: 14px">段落正文 / 描述</span></span
+              >
+            </div>
+            <div class="meta">段落</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--fs-xl</div>
+            <div class="value">
+              <span class="fs-demo"
+                ><span class="label">16px</span
+                ><span style="font-size: 16px; font-weight: 600">面板标题</span></span
+              >
+            </div>
+            <div class="meta">面板标题</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--fs-2xl</div>
+            <div class="value">
+              <span class="fs-demo"
+                ><span class="label">20px</span
+                ><span style="font-size: 20px; font-weight: 600">区块标题</span></span
+              >
+            </div>
+            <div class="meta">区块标题</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--fs-3xl</div>
+            <div class="value">
+              <span class="fs-demo"
+                ><span class="label">24px</span
+                ><span style="font-size: 24px; font-weight: 600">页面标题</span></span
+              >
+            </div>
+            <div class="meta">页面标题</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--fs-5xl</div>
+            <div class="value">
+              <span class="fs-demo"
+                ><span class="label">48px</span
+                ><span style="font-size: 48px; font-weight: 600">从"手"开始</span></span
+              >
+            </div>
+            <div class="meta">官网首页超大标题（庞门正道）</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. 间距 token -->
+      <section id="spacing">
+        <header>
+          <h2><span class="num">03</span> 间距</h2>
+          <div class="desc">4 的倍数，共 8 档</div>
+        </header>
+        <div class="token-list">
+          <div class="token-row">
+            <div class="label">--sp-1</div>
+            <div class="value">
+              <div
+                style="
+                  width: 4px;
+                  height: 16px;
+                  background: var(--brand-500);
+                  display: inline-block;
+                  margin-right: 8px;
+                "
+              ></div>
+              4px
+            </div>
+            <div class="meta">极小间距</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--sp-2</div>
+            <div class="value">
+              <div
+                style="
+                  width: 8px;
+                  height: 16px;
+                  background: var(--brand-500);
+                  display: inline-block;
+                  margin-right: 8px;
+                "
+              ></div>
+              8px
+            </div>
+            <div class="meta">组件内紧凑</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--sp-3</div>
+            <div class="value">
+              <div
+                style="
+                  width: 12px;
+                  height: 16px;
+                  background: var(--brand-500);
+                  display: inline-block;
+                  margin-right: 8px;
+                "
+              ></div>
+              12px
+            </div>
+            <div class="meta">卡片内边距</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--sp-4</div>
+            <div class="value">
+              <div
+                style="
+                  width: 16px;
+                  height: 16px;
+                  background: var(--brand-500);
+                  display: inline-block;
+                  margin-right: 8px;
+                "
+              ></div>
+              16px
+            </div>
+            <div class="meta">默认间距</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--sp-5</div>
+            <div class="value">
+              <div
+                style="
+                  width: 24px;
+                  height: 16px;
+                  background: var(--brand-500);
+                  display: inline-block;
+                  margin-right: 8px;
+                "
+              ></div>
+              24px
+            </div>
+            <div class="meta">区块间距</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--sp-6</div>
+            <div class="value">
+              <div
+                style="
+                  width: 32px;
+                  height: 16px;
+                  background: var(--brand-500);
+                  display: inline-block;
+                  margin-right: 8px;
+                "
+              ></div>
+              32px
+            </div>
+            <div class="meta">大区块</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--sp-7</div>
+            <div class="value">
+              <div
+                style="
+                  width: 48px;
+                  height: 16px;
+                  background: var(--brand-500);
+                  display: inline-block;
+                  margin-right: 8px;
+                "
+              ></div>
+              48px
+            </div>
+            <div class="meta">页面边距</div>
+          </div>
+          <div class="token-row">
+            <div class="label">--sp-8</div>
+            <div class="value">
+              <div
+                style="
+                  width: 64px;
+                  height: 16px;
+                  background: var(--brand-500);
+                  display: inline-block;
+                  margin-right: 8px;
+                "
+              ></div>
+              64px
+            </div>
+            <div class="meta">大段落</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. 圆角 token -->
+      <section id="radius">
+        <header>
+          <h2><span class="num">04</span> 圆角</h2>
+          <div class="desc">6 档圆角 + pill（药丸）</div>
+        </header>
+        <div class="btn-row" style="gap: 32px">
+          <div style="text-align: center">
+            <div
+              style="width: 64px; height: 64px; background: var(--brand-500); border-radius: 2px"
+            ></div>
+            <div class="muted" style="margin-top: 8px; font-size: 11px">xs · 2px</div>
+          </div>
+          <div style="text-align: center">
+            <div
+              style="width: 64px; height: 64px; background: var(--brand-500); border-radius: 3px"
+            ></div>
+            <div class="muted" style="margin-top: 8px; font-size: 11px">sm · 3px</div>
+          </div>
+          <div style="text-align: center">
+            <div
+              style="width: 64px; height: 64px; background: var(--brand-500); border-radius: 4px"
+            ></div>
+            <div class="muted" style="margin-top: 8px; font-size: 11px">md · 4px · 按钮</div>
+          </div>
+          <div style="text-align: center">
+            <div
+              style="width: 64px; height: 64px; background: var(--brand-500); border-radius: 6px"
+            ></div>
+            <div class="muted" style="margin-top: 8px; font-size: 11px">lg · 6px · 卡片</div>
+          </div>
+          <div style="text-align: center">
+            <div
+              style="width: 64px; height: 64px; background: var(--brand-500); border-radius: 8px"
+            ></div>
+            <div class="muted" style="margin-top: 8px; font-size: 11px">xl · 8px · 面板</div>
+          </div>
+          <div style="text-align: center">
+            <div
+              style="width: 64px; height: 64px; background: var(--brand-500); border-radius: 999px"
+            ></div>
+            <div class="muted" style="margin-top: 8px; font-size: 11px">pill · 999px</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. 阴影 token -->
+      <section id="shadow">
+        <header>
+          <h2><span class="num">05</span> 阴影</h2>
+          <div class="desc">零边框 + 阴影，区分层级。仅用于浮层/弹窗，不滥用</div>
+        </header>
+        <div class="shadow-demo">
+          <div class="shadow-card none">
+            <strong>none</strong>
+            <div class="label">--shadow-none</div>
+          </div>
+          <div class="shadow-card light">
+            <strong>light</strong>
+            <div class="label">--shadow-light<br />（弹窗轻）</div>
+          </div>
+          <div class="shadow-card floating">
+            <strong>floating</strong>
+            <div class="label">--shadow-floating<br />（悬浮面板）</div>
+          </div>
+          <div class="shadow-card popover">
+            <strong>popover</strong>
+            <div class="label">--shadow-popover<br />（下拉菜单）</div>
+          </div>
+          <div class="shadow-card floating-strong">
+            <strong>floating-strong</strong>
+            <div class="label">--shadow-floating-strong<br />（拖动中）</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. 按钮 4 套 -->
+      <section id="buttons">
+        <header>
+          <h2><span class="num">06</span> 按钮 4 套</h2>
+          <div class="desc">primary / secondary / subtle / icon —— 所有交互组件按这套命名</div>
+        </header>
+
+        <div class="sub-section">
+          <h3>基础 4 套</h3>
+          <div class="btn-row">
+            <button class="btn btn-primary">Primary</button>
+            <button class="btn btn-secondary">Secondary</button>
+            <button class="btn btn-subtle">Subtle</button>
+            <button class="btn btn-icon" title="icon">⚙</button>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <h3>尺寸</h3>
+          <div class="btn-row">
+            <button class="btn btn-primary btn-sm">Small · 24px</button>
+            <button class="btn btn-primary">Default · 30px</button>
+            <button class="btn btn-primary btn-lg">Large · 36px</button>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <h3>状态</h3>
+          <div class="btn-row">
+            <button class="btn btn-primary">Normal</button>
+            <button class="btn btn-primary" style="background: var(--brand-400)">Hover</button>
+            <button class="btn btn-primary" disabled>Disabled</button>
+            <button class="btn btn-icon active" title="active">✓</button>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <h3>形态变体</h3>
+          <div class="btn-row">
+            <button class="btn btn-primary">直角按钮</button>
+            <button class="btn btn-primary btn-pill">药丸按钮</button>
+            <button class="btn btn-secondary">了解更多 →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. 表单 -->
+      <section id="forms">
+        <header>
+          <h2><span class="num">07</span> 表单</h2>
+          <div class="desc">官网用下划线零边框，OS 端用暗色填充。两套都不出现 1px 灰色边框</div>
+        </header>
+        <div class="theme-compare">
+          <div class="panel light">
+            <div class="panel-label">官网前台（亮色 · 下划线零边框）</div>
+            <div class="panel-body">
+              <div class="field-group">
+                <div class="field">
+                  <label>姓名<span class="req">*</span></label>
+                  <input class="input" type="text" placeholder="请输入您的姓名" />
+                </div>
+                <div class="field">
+                  <label>邮箱<span class="req">*</span></label>
+                  <input class="input" type="email" placeholder="请输入您的邮箱" />
+                </div>
+                <div class="field">
+                  <label>留言</label>
+                  <textarea class="textarea" rows="3" placeholder="请输入您的需求"></textarea>
+                </div>
+                <div class="field">
+                  <label>性别</label>
+                  <select class="select">
+                    <option>请选择</option>
+                    <option>男</option>
+                    <option>女</option>
+                  </select>
+                </div>
+                <button class="btn btn-primary">提交</button>
+              </div>
+            </div>
+          </div>
+          <div class="panel dark">
+            <div class="panel-label">OS 端（暗色 · 填充）</div>
+            <div class="panel-body">
+              <div class="field-group">
+                <div class="field">
+                  <label>设备 ID</label>
+                  <input class="input" type="text" placeholder="如 Z-EMG-4" />
+                </div>
+                <div class="field">
+                  <label>数量</label>
+                  <input class="input" type="number" value="1" />
+                </div>
+                <div class="field">
+                  <label>项目</label>
+                  <select class="select">
+                    <option>XYZ演示</option>
+                    <option>kj核酸线4-5站</option>
+                  </select>
+                </div>
+                <button class="btn btn-primary">加入购物车</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8. 卡片 -->
+      <section id="cards">
+        <header>
+          <h2><span class="num">08</span> 卡片</h2>
+          <div class="desc">白底 + 极轻阴影 + 圆角 6-8px。设备库卡片 3 列网格 + 红色品牌图标</div>
+        </header>
+        <div class="sub-section">
+          <h3>普通卡片（官网）</h3>
+          <div class="card-grid">
+            <div class="card">
+              <div class="icon">⚙</div>
+              <div class="title">Z-EMG-4 电动夹爪</div>
+              <div class="meta">¥ 2,800 · 现货</div>
+            </div>
+            <div class="card">
+              <div class="icon">⚙</div>
+              <div class="title">Z-EFG-8S 平行电爪</div>
+              <div class="meta">¥ 3,200 · 现货</div>
+            </div>
+            <div class="card">
+              <div class="icon">⚙</div>
+              <div class="title">Z-EFG-20 平行电爪</div>
+              <div class="meta">¥ 4,500 · 缺货</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sub-section">
+          <h3>设备库卡片（OS 端 3 列网格）</h3>
+          <div class="theme-compare">
+            <div class="panel light">
+              <div class="panel-label">亮色场景下</div>
+              <div class="panel-body">
+                <div class="device-grid-3">
+                  <div class="device-card">
+                    <div class="device-icon">⬛</div>
+                    <div class="device-name">Z-EMG-4</div>
+                  </div>
+                  <div class="device-card selected">
+                    <div class="device-icon">⬛</div>
+                    <div class="device-name">Z-EFG-8S</div>
+                  </div>
+                  <div class="device-card">
+                    <div class="device-icon">⬛</div>
+                    <div class="device-name">Z-EFG-20S</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="panel dark">
+              <div class="panel-label">暗色场景下（OS 端默认）</div>
+              <div class="panel-body">
+                <div class="device-grid-3">
+                  <div class="device-card">
+                    <div class="device-icon">⬛</div>
+                    <div class="device-name">Z-EMG-4</div>
+                  </div>
+                  <div class="device-card selected">
+                    <div class="device-icon">⬛</div>
+                    <div class="device-name">Z-EFG-8S</div>
+                  </div>
+                  <div class="device-card">
+                    <div class="device-icon">⬛</div>
+                    <div class="device-name">Z-EFG-20S</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9. 状态色（徽标） -->
+      <section id="badges">
+        <header>
+          <h2><span class="num">09</span> 状态徽标</h2>
+          <div class="desc">
+            用色块/明度表达状态，不用边框。和 PRD §3.3 物料清单三分类、OS 端运行模式共用
+          </div>
+        </header>
+        <div class="sub-section">
+          <h3>商城业务</h3>
+          <div class="btn-row">
+            <span class="badge in-stock">现货</span>
+            <span class="badge out-of-stock">缺货</span>
+            <span class="badge on-sale">活动中</span>
+            <span class="badge cart-0">购物车 0</span>
+            <span class="badge cart-active">购物车 3</span>
+          </div>
+        </div>
+        <div class="sub-section">
+          <h3>OS 端运行</h3>
+          <div class="btn-row">
+            <span class="badge running">运行中</span>
+            <span class="badge compiling">编译中</span>
+            <span class="badge downloading">已下载</span>
+            <span class="badge idle">未运行</span>
+            <span class="badge error">3</span>
+          </div>
+        </div>
+        <div class="sub-section">
+          <h3>物料清单三分类（PRD §3.3 颜色对照）</h3>
+          <div class="btn-row">
+            <span class="badge running">标准件</span>
+            <span class="badge compiling">加工件</span>
+            <span class="badge idle">参考件</span>
+          </div>
+          <p class="muted" style="margin-top: 12px; font-size: 12px">
+            标准件=品牌红边框提示直接下单；加工件=橙色（走定制流程）；参考件=灰色（仅展示，不卖）
+          </p>
+        </div>
+      </section>
+
+      <!-- 10. 顶部菜单条 -->
+      <section id="menu">
+        <header>
+          <h2><span class="num">10</span> 顶部菜单条</h2>
+          <div class="desc">
+            官网浅色 vs OS 端亮外壳（top-menu 永远浅色，3D 视口在内层才是暗色）
+          </div>
+        </header>
+        <div class="theme-compare">
+          <div class="panel light">
+            <div class="panel-label">官网前台</div>
+            <div class="panel-body">
+              <div class="mock-menu light">
+                <div class="logo">HITBOT</div>
+                <nav class="nav">
+                  <a href="#">首页</a><a href="#">商城</a><a href="#">产品中心</a
+                  ><a href="#">关于慧灵</a>
+                </nav>
+                <div class="actions">
+                  <div class="cart-icon">🛒<span class="count">0</span></div>
+                  <span>登录</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel dark">
+            <div class="panel-label">OS 端（top-menu 仍是浅色）</div>
+            <div class="panel-body">
+              <div class="mock-menu light">
+                <div class="logo">XYZ演示</div>
+                <nav class="nav"><a href="#">项目</a><a href="#">设备</a><a href="#">编辑</a></nav>
+                <div class="actions">
+                  <span>AI</span><span>日志</span>
+                  <div class="cart-icon">🛒<span class="count">3</span></div>
+                  <span>严世威</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 11. 购物车 -->
+      <section id="cart">
+        <header>
+          <h2><span class="num">11</span> 购物车</h2>
+          <div class="desc">
+            购物车下拉 + 数字角标 + 全局入口（top-menu / 3D 视口工具栏 / 状态栏）
+          </div>
+        </header>
+        <div class="theme-compare">
+          <div class="panel light">
+            <div class="panel-label">官网购物车下拉</div>
+            <div class="panel-body">
+              <div class="cart-dropdown">
+                <div class="item">
+                  <div class="name">Z-EMG-4 电动夹爪</div>
+                  <div class="qty">×2</div>
+                </div>
+                <div class="item">
+                  <div class="name">Z-EFG-8S 平行电爪</div>
+                  <div class="qty">×1</div>
+                </div>
+                <div class="item muted" style="font-size: 12px">
+                  Z-Mod-SE-54 智能电缸（参考件，未选）
+                </div>
+                <div class="divider"></div>
+                <div class="btn-row" style="justify-content: space-between">
+                  <span class="muted">合计 3 件</span>
+                  <button class="btn btn-primary btn-sm">去结算</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel dark">
+            <div class="panel-label">OS 端购物车下拉（紧贴工具栏）</div>
+            <div class="panel-body">
+              <div class="cart-dropdown">
+                <div class="item">
+                  <div class="name text-strong">Z-EMG-4 电动夹爪</div>
+                  <div class="qty">×2</div>
+                </div>
+                <div class="item">
+                  <div class="name text-strong">Z-EFG-8S 平行电爪</div>
+                  <div class="qty">×1</div>
+                </div>
+                <div class="item muted" style="font-size: 12px">Bottle_cap_1（参考件）</div>
+                <div class="divider"></div>
+                <div class="btn-row" style="justify-content: space-between">
+                  <span class="muted">3 件 · 当前项目 XYZ演示</span>
+                  <button class="btn btn-primary btn-sm">跳转官网结算 →</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 12. 双主题对比（完整 demo） -->
+      <section id="compare">
+        <header>
+          <h2><span class="num">12</span> 双主题完整对比</h2>
+          <div class="desc">同一组件在亮色（官网）和暗色（OS 端）下的实现。点击右下角切换</div>
+        </header>
+        <div class="theme-compare">
+          <div class="panel light">
+            <div class="panel-label">官网 · 浅色</div>
+            <div class="panel-body">
+              <h3 style="margin-bottom: 8px">机械臂属性面板</h3>
+              <p class="muted" style="margin-bottom: 16px">Z-Arm S622 · 伺服 READY</p>
+              <div class="field-group">
+                <div class="field">
+                  <label>X (mm)</label><input class="input" type="number" value="237.985" />
+                </div>
+                <div class="field">
+                  <label>Y (mm)</label><input class="input" type="number" value="525.006" />
+                </div>
+              </div>
+              <div class="btn-row" style="margin-top: 16px">
+                <button class="btn btn-primary">挂载</button>
+                <button class="btn btn-secondary">复制</button>
+                <button class="btn btn-subtle">归零</button>
+              </div>
+            </div>
+          </div>
+          <div class="panel dark">
+            <div class="panel-label">OS 端 · 暗色</div>
+            <div class="panel-body">
+              <h3 style="margin-bottom: 8px; color: var(--text-strong)">机械臂属性面板</h3>
+              <p class="muted" style="margin-bottom: 16px">Z-Arm S622 · 伺服 READY</p>
+              <div class="field-group">
+                <div class="field">
+                  <label>X (mm)</label><input class="input" type="number" value="237.985" />
+                </div>
+                <div class="field">
+                  <label>Y (mm)</label><input class="input" type="number" value="525.006" />
+                </div>
+              </div>
+              <div class="btn-row" style="margin-top: 16px">
+                <button class="btn btn-primary">挂载</button>
+                <button class="btn btn-secondary">复制</button>
+                <button class="btn btn-subtle">归零</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 附录：参考来源 -->
+      <section>
+        <header>
+          <h2>附录：规范来源</h2>
+          <div class="desc">本规范综合自以下调研和现状</div>
+        </header>
+        <ul style="line-height: 2; padding-left: 24px">
+          <li><code>docs/product/PRD.md</code> · 商城产品需求文档（v0.1）</li>
+          <li>
+            <code>docs/research/hitbot-cc-research.md</code> ·
+            官网调研报告（视觉规范、菜单、品牌色）
+          </li>
+          <li>
+            <code>docs/research/hitbotos-ui-opt-research.md</code> · OS
+            端调研报告（design-system.css + borderless.css）
+          </li>
+          <li>官网实际页面（首页、关于慧灵、产品中心、footer 4 列）</li>
+          <li>OS 端实际页面（设备库面板、3D 视口、动作编辑器）</li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- 主题切换器（开发用） -->
+    <div class="theme-switcher" id="themeSwitcher">
+      <button data-theme="light" class="active">官网亮色</button>
+      <button data-theme="dark">OS 端暗色</button>
+    </div>
+
+    <script>
+      // 主题切换
+      const switcher = document.getElementById('themeSwitcher');
+      switcher.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-theme]');
+        if (!btn) return;
+        const theme = btn.dataset.theme;
+        document.body.className = 'theme-' + theme;
+        switcher.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+      });
+    </script>
+  </body>
+</html>

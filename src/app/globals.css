@@ -1,0 +1,237 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* ============================================================
+   设计 Token（从 docs/design/store-design-system.html 迁移过来）
+   跨主题不变：品牌色 / 中性色 / 状态色（原始色板）
+   ============================================================ */
+@layer base {
+  :root {
+    /* 品牌色 */
+    --brand-500: #bd1c22;
+    --brand-600: #b71c1c;
+    --brand-400: #d22a30;
+    --brand-100: #fbe7e8;
+    --brand-50: #fcefee;
+    --brand-soft: rgba(189, 28, 34, 0.1);
+    --brand-soft-2: rgba(189, 28, 34, 0.22);
+
+    /* 中性色 */
+    --neutral-1000: #000000;
+    --neutral-900: #1a1a1a;
+    --neutral-800: #2b2b2f;
+    --neutral-700: #3a3a3a;
+    --neutral-600: #555555;
+    --neutral-500: #777777;
+    --neutral-400: #999999;
+    --neutral-300: #c8c5ba;
+    --neutral-200: #d5d5d5;
+    --neutral-100: #ebebeb;
+    --neutral-50: #f7f7f8;
+    --neutral-0: #ffffff;
+
+    /* 状态色 */
+    --state-blue: #3c7eff;
+    --state-green: #2f9e6d;
+    --state-green-strong: #25845b;
+    --state-yellow: #f2b84b;
+    --state-yellow-strong: #ffd37a;
+    --state-danger: #ff7478;
+    --state-red-soft: rgba(255, 116, 120, 0.16);
+  }
+}
+
+/* ============================================================
+   主题语义变量（按主题切换）
+   light = 官网营销/前台默认
+   dark  = OS 端嵌入预览
+   ============================================================ */
+@layer base {
+  .light {
+    --bg-app: #fbfbfa;
+    --bg-surface: #f2f2f0;
+    --bg-elevated: #fffffd;
+    --bg-control: #e8e7e3;
+    --bg-control-hover: #dad8d2;
+    --bg-control-active: #c9c6bd;
+    --bg-shell: #f7f7f8;
+    --bg-statusbar: #ebebeb;
+
+    --text-strong: #171716;
+    --text: #2b2b2f;
+    --text-muted: #6d6a66;
+    --text-disabled: #c8c5ba;
+
+    --divider: #e7e5df;
+  }
+
+  .dark {
+    --bg-app: #242424;
+    --bg-surface: #2b2b2b;
+    --bg-elevated: #2f2f2f;
+    --bg-control: #3a3a3a;
+    --bg-control-hover: #454545;
+    --bg-control-active: #505050;
+    --bg-shell: #f7f7f8; /* top menu 仍亮色（OS 端约定） */
+    --bg-statusbar: #f0f0f0;
+
+    --text-strong: #ffffff;
+    --text: #dddddd;
+    --text-muted: #a5a5a5;
+    --text-disabled: #777777;
+
+    --divider: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* ============================================================
+   shadcn 变量映射到我们的语义变量
+   ============================================================ */
+@layer base {
+  .light,
+  .dark {
+    --background: var(--bg-app);
+    --foreground: var(--text-strong);
+    --card: var(--bg-elevated);
+    --card-foreground: var(--text-strong);
+    --popover: var(--bg-elevated);
+    --popover-foreground: var(--text-strong);
+    --primary: var(--brand-500);
+    --primary-foreground: var(--neutral-0);
+    --secondary: var(--bg-control);
+    --secondary-foreground: var(--text);
+    --muted: var(--bg-surface);
+    --muted-foreground: var(--text-muted);
+    --accent: var(--brand-soft);
+    --accent-foreground: var(--brand-500);
+    --destructive: var(--brand-500);
+    --destructive-foreground: var(--neutral-0);
+    --border: transparent; /* 零边框 */
+    --input: transparent;
+    --ring: var(--brand-500);
+    --radius: 4px; /* md */
+  }
+}
+
+/* ============================================================
+   Tailwind v4 @theme 块：把 CSS 变量暴露为工具类
+   ============================================================ */
+@theme inline {
+  /* 背景 */
+  --color-bg-app: var(--bg-app);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-control: var(--bg-control);
+  --color-bg-control-hover: var(--bg-control-hover);
+  --color-bg-control-active: var(--bg-control-active);
+  --color-bg-shell: var(--bg-shell);
+  --color-bg-statusbar: var(--bg-statusbar);
+
+  /* 文字 */
+  --color-text-strong: var(--text-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+
+  /* 分割线 */
+  --color-divider: var(--divider);
+
+  /* 品牌色 */
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-2: var(--brand-soft-2);
+
+  /* 中性色 */
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-1000: var(--neutral-1000);
+
+  /* 状态色 */
+  --color-state-blue: var(--state-blue);
+  --color-state-green: var(--state-green);
+  --color-state-green-strong: var(--state-green-strong);
+  --color-state-yellow: var(--state-yellow);
+  --color-state-yellow-strong: var(--state-yellow-strong);
+  --color-state-danger: var(--state-danger);
+  --color-state-red-soft: var(--state-red-soft);
+
+  /* 字体 */
+  --font-sans: 'Segoe UI', Tahoma, Geneva, Verdana, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-display:
+    'PangMenZhengDaoBiaoTiTiMianFeiBan-2', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  /* 字号 */
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-md: 12px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-4xl: 32px;
+  --text-5xl: 48px;
+
+  /* 间距（覆盖 Tailwind 默认 spacing） */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 24px;
+  --spacing-6: 32px;
+  --spacing-7: 48px;
+  --spacing-8: 64px;
+
+  /* 圆角 */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-pill: 9999px;
+
+  /* 阴影 */
+  --shadow-floating: 0 14px 34px rgba(0, 0, 0, 0.24);
+  --shadow-floating-strong: 0 22px 52px rgba(0, 0, 0, 0.48), 0 6px 18px rgba(0, 0, 0, 0.28);
+  --shadow-popover: 0 18px 42px rgba(0, 0, 0, 0.44), 0 4px 14px rgba(0, 0, 0, 0.24);
+  --shadow-light: 0 10px 30px rgba(16, 18, 22, 0.14);
+}
+
+/* ============================================================
+   全局基线
+   ============================================================ */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-md);
+    line-height: 1.45;
+  }
+  body {
+    background: var(--bg-app);
+    color: var(--text-strong);
+    margin: 0;
+  }
+  a {
+    color: var(--brand-500);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--brand-400);
+  }
+}
