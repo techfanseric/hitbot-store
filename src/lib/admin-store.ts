@@ -41,6 +41,13 @@ interface InviteMemberInput {
   companyName?: string;
 }
 
+interface UpdateMemberProfileInput {
+  name?: string;
+  email?: string;
+  phone?: string;
+  roleName?: string;
+}
+
 interface AdminState {
   productRecords: AdminProductRecord[];
   members: AdminMember[];
@@ -55,8 +62,11 @@ interface AdminState {
   ) => void;
   approveEnterpriseAccessRequest: (requestId: string, actor?: string) => void;
   rejectEnterpriseAccessRequest: (requestId: string, actor?: string) => void;
+  updateEnterpriseProfile: (enterpriseId: string, companyName: string, actor?: string) => void;
+  updateMemberProfile: (memberId: string, patch: UpdateMemberProfileInput, actor?: string) => void;
   updateMemberRoleName: (memberId: string, roleName: string, actor?: string) => void;
   toggleMemberPermission: (memberId: string, permission: AdminPermission, actor?: string) => void;
+  deleteMember: (memberId: string, actor?: string) => void;
   updateApprovalSettings: (
     enterpriseId: string,
     patch: Partial<Omit<AdminApprovalSettings, 'enterpriseId' | 'updatedAt'>>,
@@ -205,12 +215,17 @@ function defaultApprovalSettingsForEnterprise(
   const defaultApprover =
     members.find(
       (member) =>
-        member.enterpriseId === enterpriseId && member.role === 'admin' && member.status === 'active',
-    ) ?? members.find((member) => member.enterpriseId === enterpriseId && member.status === 'active');
+        member.enterpriseId === enterpriseId &&
+        member.role === 'admin' &&
+        member.status === 'active',
+    ) ??
+    members.find((member) => member.enterpriseId === enterpriseId && member.status === 'active');
   const defaultBuyer =
     members.find(
       (member) =>
-        member.enterpriseId === enterpriseId && member.role === 'buyer' && member.status === 'active',
+        member.enterpriseId === enterpriseId &&
+        member.role === 'buyer' &&
+        member.status === 'active',
     ) ?? defaultApprover;
   const defaultLogisticsOwner =
     members.find(
@@ -451,6 +466,62 @@ export const useAdminStore = create<AdminState>()(
             }),
           };
         }),
+      updateEnterpriseProfile: (enterpriseId, companyName, actor = 'System') =>
+        set((state) => {
+          const nextCompanyName = companyName.trim();
+          if (!nextCompanyName) return state;
+
+          return {
+            members: state.members.map((member) =>
+              (member.enterpriseId ?? 'ENT-HITBOT-CUSTOMER') === enterpriseId
+                ? {
+                    ...member,
+                    companyName: nextCompanyName,
+                    updatedAt: now(),
+                  }
+                : member,
+            ),
+            auditLogs: appendAudit(state.auditLogs, {
+              module: 'permissions',
+              action: 'member-role',
+              actor,
+              target: enterpriseId,
+              summary: nextCompanyName,
+            }),
+          };
+        }),
+      updateMemberProfile: (memberId, patch, actor = 'System') =>
+        set((state) => {
+          const currentMember = state.members.find((member) => member.id === memberId);
+          if (!currentMember) return state;
+
+          const nextName = patch.name?.trim();
+          const nextEmail = patch.email?.trim().toLowerCase();
+          const nextPhone = patch.phone?.trim();
+          const nextRoleName = patch.roleName?.trim();
+          const nextMember: AdminMember = {
+            ...currentMember,
+            name: nextName || currentMember.name,
+            email: nextEmail || currentMember.email,
+            phone: nextPhone === undefined ? currentMember.phone : nextPhone,
+            roleName:
+              currentMember.role === 'admin'
+                ? currentMember.roleName
+                : nextRoleName || currentMember.roleName,
+            updatedAt: now(),
+          };
+
+          return {
+            members: state.members.map((member) => (member.id === memberId ? nextMember : member)),
+            auditLogs: appendAudit(state.auditLogs, {
+              module: 'permissions',
+              action: 'member-role',
+              actor,
+              target: memberId,
+              summary: `${nextMember.name}:${nextMember.roleName ?? ''}`,
+            }),
+          };
+        }),
       updateMemberRoleName: (memberId, roleName, actor = 'System') =>
         set((state) => ({
           members: state.members.map((member) =>
@@ -499,6 +570,33 @@ export const useAdminStore = create<AdminState>()(
             summary: `${memberId}:${permission}`,
           }),
         })),
+      deleteMember: (memberId, actor = 'System') =>
+        set((state) => {
+          const member = state.members.find((item) => item.id === memberId);
+          if (!member || member.role === 'admin') return state;
+
+          const clearDeletedOwner = (value?: string) => (value === memberId ? '' : value);
+
+          return {
+            members: state.members.filter((item) => item.id !== memberId),
+            approvalSettings: state.approvalSettings.map((settings) => ({
+              ...settings,
+              defaultApproverMemberId: clearDeletedOwner(settings.defaultApproverMemberId) ?? '',
+              orderReviewerMemberId: clearDeletedOwner(settings.orderReviewerMemberId),
+              deliveryOwnerMemberId: clearDeletedOwner(settings.deliveryOwnerMemberId),
+              paymentInvoiceOwnerMemberId: clearDeletedOwner(settings.paymentInvoiceOwnerMemberId),
+              logisticsOwnerMemberId: clearDeletedOwner(settings.logisticsOwnerMemberId),
+              updatedAt: now(),
+            })),
+            auditLogs: appendAudit(state.auditLogs, {
+              module: 'permissions',
+              action: 'member-permission',
+              actor,
+              target: memberId,
+              summary: `delete:${member.email}`,
+            }),
+          };
+        }),
       updateApprovalSettings: (enterpriseId, patch, actor = 'System') =>
         set((state) => {
           const current = approvalSettingsForEnterprise(
@@ -649,17 +747,17 @@ export const useAdminStore = create<AdminState>()(
 
               const mergedRole = defaultMember?.role ?? member.role;
               const roleName =
-                defaultMember?.roleName ??
                 member.roleName ??
+                defaultMember?.roleName ??
                 (mergedRole === 'admin' ? '企业管理员' : member.name);
 
               return {
                 ...member,
-                name: defaultMember?.name ?? member.name,
-                email: defaultMember?.email ?? member.email,
+                name: member.name ?? defaultMember?.name,
+                email: member.email ?? defaultMember?.email,
                 role: mergedRole,
                 roleName,
-                status: defaultMember?.status ?? member.status,
+                status: member.status ?? defaultMember?.status,
                 enterpriseId:
                   member.enterpriseId ??
                   approvedAccessRequest?.enterpriseId ??
@@ -671,7 +769,7 @@ export const useAdminStore = create<AdminState>()(
                     member.companyName ?? approvedAccessRequest?.companyName,
                     '深圳智造装备有限公司',
                   ),
-                phone: defaultMember?.phone ?? member.phone ?? approvedAccessRequest?.phone,
+                phone: member.phone ?? defaultMember?.phone ?? approvedAccessRequest?.phone,
                 permissions: normalizePermissions(member.permissions ?? defaultMember?.permissions),
               };
             })

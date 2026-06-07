@@ -156,6 +156,20 @@ const sortingCellLines = [
   orderLine('p-008', 'Z-Mod-SE-54', 'Z-Mod-SE-54 末端模块', 'Z-Mod-SE-54 End Module', 2, 580000),
 ];
 
+const calibrationCellLines = [
+  orderLine('p-001', 'Z-EMG-4', 'Z-EMG-4 电动夹爪', 'Z-EMG-4 Electric Gripper', 2, 280000),
+  orderLine('p-008', 'Z-Mod-SE-54', 'Z-Mod-SE-54 末端模块', 'Z-Mod-SE-54 End Module', 1, 580000),
+];
+
+const handSortingLines = [
+  orderLine('p-007', 'Z-Hand 6', 'Z-Hand 6 灵巧手', 'Z-Hand 6 Dexterous Hand', 1, 9800000),
+];
+
+const desktopDemoLines = [
+  orderLine('p-001', 'Z-EMG-4', 'Z-EMG-4 电动夹爪', 'Z-EMG-4 Electric Gripper', 1, 280000),
+  orderLine('p-002', 'Z-EFG-8S', 'Z-EFG-8S 电动夹爪', 'Z-EFG-8S Electric Gripper', 1, 320000),
+];
+
 const defaultOrders: LocalOrderSnapshot[] = [
   {
     orderNo: 'HB20260601093001',
@@ -259,6 +273,94 @@ const defaultOrders: LocalOrderSnapshot[] = [
     updatedAt: '2026-05-30T01:00:00.000Z',
     status: 'in-production',
   },
+  {
+    orderNo: 'HB20260528140526',
+    enterpriseId: defaultProfile.enterpriseId,
+    companyName: defaultProfile.companyName,
+    projectId: 'calibration-cell-06',
+    projectName: '标定工位夹爪补充',
+    role: 'buyer',
+    approvalMode: 'admin-review',
+    submittedBy: MOCK_BUYER_NAME,
+    approvedBy: MOCK_ADMIN_NAME,
+    approvedAt: '2026-05-28T06:20:00.000Z',
+    paidBy: MOCK_BUYER_NAME,
+    paidAt: '2026-05-28T07:05:00.000Z',
+    paymentReference: 'PAY-CORP-0528140526',
+    paymentMethod: 'corporate',
+    lines: calibrationCellLines,
+    shippingAddress: defaultOrderAddress,
+    invoice: defaultOrderInvoice,
+    note: '付款已确认，等待生产排期。',
+    subtotalCents: 1140000,
+    itemCount: 3,
+    submittedAt: '2026-05-28T06:05:26.000Z',
+    updatedAt: '2026-05-28T07:05:00.000Z',
+    status: 'paid',
+  },
+  {
+    orderNo: 'HB20260526111640',
+    enterpriseId: defaultProfile.enterpriseId,
+    companyName: defaultProfile.companyName,
+    projectId: 'hand-sorting-07',
+    projectName: '灵巧手分拣验证项目',
+    role: 'buyer',
+    approvalMode: 'admin-review',
+    submittedBy: MOCK_BUYER_NAME,
+    approvedBy: MOCK_ADMIN_NAME,
+    approvedAt: '2026-05-26T03:26:00.000Z',
+    paidBy: MOCK_BUYER_NAME,
+    paidAt: '2026-05-26T04:10:00.000Z',
+    paymentReference: 'PAY-CORP-0526111640',
+    productionStartedAt: '2026-05-27T01:30:00.000Z',
+    shippedAt: '2026-05-28T08:45:00.000Z',
+    carrier: 'SF Express',
+    trackingNo: 'SF0526111640',
+    paymentMethod: 'corporate',
+    lines: handSortingLines,
+    shippingAddress: {
+      ...defaultOrderAddress,
+      recipient: MOCK_ENGINEER_NAME,
+      phone: '17701551867',
+    },
+    invoice: defaultOrderInvoice,
+    note: '已发货到工程测试点，等待物流负责人确认收货。',
+    subtotalCents: 9800000,
+    itemCount: 1,
+    submittedAt: '2026-05-26T03:16:40.000Z',
+    updatedAt: '2026-05-28T08:45:00.000Z',
+    status: 'shipped',
+  },
+  {
+    orderNo: 'HB20260520100812',
+    enterpriseId: defaultProfile.enterpriseId,
+    companyName: defaultProfile.companyName,
+    projectId: 'desktop-demo-08',
+    projectName: '桌面演示单元备件',
+    role: 'admin',
+    approvalMode: 'admin-direct',
+    submittedBy: MOCK_ADMIN_NAME,
+    approvedBy: MOCK_ADMIN_NAME,
+    approvedAt: '2026-05-20T02:08:12.000Z',
+    paidBy: MOCK_BUYER_NAME,
+    paidAt: '2026-05-20T03:15:00.000Z',
+    paymentReference: 'PAY-CORP-0520100812',
+    productionStartedAt: '2026-05-21T01:00:00.000Z',
+    shippedAt: '2026-05-22T06:35:00.000Z',
+    completedAt: '2026-05-23T02:40:00.000Z',
+    carrier: 'SF Express',
+    trackingNo: 'SF0520100812',
+    paymentMethod: 'corporate',
+    lines: desktopDemoLines,
+    shippingAddress: defaultOrderAddress,
+    invoice: defaultOrderInvoice,
+    note: '演示单元备件已完成收货。',
+    subtotalCents: 600000,
+    itemCount: 2,
+    submittedAt: '2026-05-20T02:08:12.000Z',
+    updatedAt: '2026-05-23T02:40:00.000Z',
+    status: 'completed',
+  },
 ];
 
 const defaultQuoteRequests: LocalQuoteRequest[] = [
@@ -303,6 +405,36 @@ const defaultQuoteRequests: LocalQuoteRequest[] = [
     note: '含加工、表面处理与随箱附件。',
     updatedAt: '2026-06-04T06:20:00.000Z',
     status: 'quoted',
+  },
+  {
+    requestNo: 'HQ20260527143022',
+    enterpriseId: defaultProfile.enterpriseId,
+    companyName: defaultProfile.companyName,
+    orderNo: 'HB20260527142958',
+    projectName: '末端法兰定制转接板',
+    lines: [
+      orderLine(
+        'p-010',
+        'Custom-Frame-A1',
+        '末端法兰定制转接板',
+        'Custom End-flange Adapter',
+        2,
+        238000,
+        {
+          partClass: 'custom',
+          source: 'web',
+          quoteRequired: true,
+        },
+      ),
+    ],
+    submittedBy: MOCK_BUYER_NAME,
+    submittedAt: '2026-05-27T06:30:22.000Z',
+    quotedAt: '2026-05-27T08:15:00.000Z',
+    quotedBy: 'HITBOT 商务',
+    estimateCents: 476000,
+    note: '报价已确认，保留为已完成询价样例。',
+    updatedAt: '2026-05-27T09:05:00.000Z',
+    status: 'accepted',
   },
 ];
 
@@ -350,6 +482,20 @@ const defaultOsHandoffs: LocalOsHandoff[] = [
     submittedAt: '2026-06-05T03:20:00.000Z',
     updatedAt: '2026-06-05T03:20:00.000Z',
     status: 'pending',
+  },
+  {
+    id: 'OS-pallet-check-06-20260606103000',
+    enterpriseId: defaultProfile.enterpriseId,
+    companyName: defaultProfile.companyName,
+    projectId: 'pallet-check-06',
+    projectName: '托盘检测工位接续',
+    itemCount: 3,
+    submittedBy: MOCK_ENGINEER_NAME,
+    submittedAt: '2026-06-06T02:30:00.000Z',
+    acceptedBy: MOCK_BUYER_NAME,
+    acceptedAt: '2026-06-06T03:10:00.000Z',
+    updatedAt: '2026-06-06T03:10:00.000Z',
+    status: 'accepted',
   },
 ];
 
@@ -907,7 +1053,11 @@ export const useProcurementStore = create<ProcurementState>()(
         );
         const billableLines = lines.filter((line) => line.selected !== false && line.sellable);
         const quoteOnlyOrder = quoteLines.length > 0 && billableLines.length === 0;
-        const requiresApproval = orderRequiresApproval(profile, subtotalCents, quoteLines.length > 0);
+        const requiresApproval = orderRequiresApproval(
+          profile,
+          subtotalCents,
+          quoteLines.length > 0,
+        );
         const approvalMode: ApprovalMode = requiresApproval
           ? approvalModeForRole(profile.role)
           : profile.role === 'admin'
@@ -1109,14 +1259,15 @@ export const useProcurementStore = create<ProcurementState>()(
               status: nextStatus,
               approvalMode,
               subtotalCents: request.estimateCents ?? order.subtotalCents,
-              approver:
-                nextStatus === 'pending-approval' ? approverForProfile(profile) : undefined,
+              approver: nextStatus === 'pending-approval' ? approverForProfile(profile) : undefined,
               approvedBy:
                 nextStatus === 'pending-payment' && profile.role === 'admin'
                   ? profile.contactName
                   : order.approvedBy,
               approvedAt:
-                nextStatus === 'pending-payment' && profile.role === 'admin' ? updatedAt : undefined,
+                nextStatus === 'pending-payment' && profile.role === 'admin'
+                  ? updatedAt
+                  : undefined,
               updatedAt,
             };
           }),

@@ -64,7 +64,10 @@ export function TopNav({ locale }: TopNavProps) {
         </NextLink>
 
         <div className="ml-4 flex h-full items-center">
-          <nav className="hidden h-full items-center whitespace-nowrap lg:flex" aria-label={t('products')}>
+          <nav
+            className="hidden h-full items-center whitespace-nowrap lg:flex"
+            aria-label={t('products')}
+          >
             {officialNavItems.map((item) => (
               <NextLink
                 key={item.key}
@@ -108,7 +111,7 @@ export function TopNav({ locale }: TopNavProps) {
               >
                 <User className="size-[18px] lg:size-[20px]" />
               </NextLink>
-              <div className="invisible absolute top-full right-0 z-50 pt-3 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+              <div className="invisible absolute top-full right-0 z-50 pt-3 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100">
                 <div className="bg-bg-elevated text-text-strong shadow-popover w-[240px] rounded-md p-2">
                   {effectiveAuthenticated ? (
                     <>

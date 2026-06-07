@@ -1,6 +1,6 @@
 'use client';
 
-import { Children, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import Link from 'next/link';
 import {
@@ -15,12 +15,12 @@ import {
   ListFilter,
   LogOut,
   ReceiptText,
+  Save,
   Send,
   ShieldCheck,
   Trash2,
   UserCog,
   UsersRound,
-  Wrench,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
@@ -68,11 +68,6 @@ type MemberFormState = {
   permissions: AdminPermission[];
 };
 
-const roleIcons = {
-  admin: ShieldCheck,
-  buyer: UserCog,
-  engineer: Wrench,
-};
 const permissionOptions: AdminPermission[] = ['orders', 'invoices', 'permissions'];
 
 function canApproveOrder(profile: EnterpriseProfile, order: LocalOrderSnapshot) {
@@ -119,6 +114,9 @@ export function AccountPanel() {
   const inviteMember = useAdminStore((state) => state.inviteMember);
   const activateMember = useAdminStore((state) => state.activateMember);
   const toggleMemberPermission = useAdminStore((state) => state.toggleMemberPermission);
+  const deleteMember = useAdminStore((state) => state.deleteMember);
+  const updateEnterpriseProfile = useAdminStore((state) => state.updateEnterpriseProfile);
+  const updateMemberProfile = useAdminStore((state) => state.updateMemberProfile);
   const updateApprovalSettings = useAdminStore((state) => state.updateApprovalSettings);
   const {
     isAuthenticated,
@@ -260,21 +258,22 @@ export function AccountPanel() {
       ),
     [enterpriseApprovalSettings, enterpriseOrders, members, profile],
   );
-  const pendingHandoffs = useMemo(
-    () => enterpriseOsHandoffs.filter((handoff) => handoff.status === 'pending'),
+  const continuableHandoffs = useMemo(
+    () => enterpriseOsHandoffs.filter((handoff) => handoff.status !== 'submitted'),
     [enterpriseOsHandoffs],
   );
   const pendingQuotes = useMemo(
     () => enterpriseQuoteRequests.filter((request) => request.status !== 'accepted'),
     [enterpriseQuoteRequests],
   );
-  const pendingProjectActions = pendingOrders.length + pendingHandoffs.length + pendingQuotes.length;
+  const pendingOrderActions = pendingOrders.length;
+  const projectContinuationCount = continuableHandoffs.length + pendingQuotes.length;
   const isEnterpriseAdmin = profile.role === 'admin';
   const canManageInvoices =
     isEnterpriseAdmin || Boolean(activeMember?.permissions.includes('invoices'));
   const accountTabs: Array<{ key: AccountTab; label: string; count?: number }> = [
     { key: 'overview', label: t('tabOverview') },
-    { key: 'orders', label: t('tabOrders'), count: pendingProjectActions },
+    { key: 'orders', label: t('tabOrders'), count: pendingOrderActions },
     ...(canManageInvoices
       ? [
           {
@@ -317,6 +316,9 @@ export function AccountPanel() {
     }
     if (activeMember.companyName && activeMember.companyName !== profile.companyName) {
       profilePatch.companyName = activeMember.companyName;
+    }
+    if (activeMember.name && activeMember.name !== profile.contactName) {
+      profilePatch.contactName = activeMember.name;
     }
     if (activeMember.phone && activeMember.phone !== profile.phone) {
       profilePatch.phone = activeMember.phone;
@@ -369,9 +371,7 @@ export function AccountPanel() {
 
   return (
     <div className="grid min-w-0 gap-4">
-      {!authHydrated && (
-        <section className="bg-bg-elevated min-h-[180px] rounded-lg p-4 md:p-5" />
-      )}
+      {!authHydrated && <section className="bg-bg-elevated min-h-[180px] rounded-lg p-4 md:p-5" />}
 
       {authHydrated && !isAuthenticated && (
         <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
@@ -536,32 +536,144 @@ export function AccountPanel() {
 
           <div className="min-w-0 space-y-4">
             {activeTab === 'overview' && (
-              <section className="grid gap-4 md:grid-cols-2">
-                <OverviewCard
-                  title={t('overviewProjectActions')}
-                  count={pendingProjectActions}
-                  body={
-                    pendingProjectActions > 0
-                      ? t('overviewProjectActionsBody', {
-                          orders: pendingOrders.length,
-                          handoffs: pendingHandoffs.length,
-                          quotes: pendingQuotes.length,
-                        })
-                      : t('overviewProjectActionsEmpty')
-                  }
-                  onClick={() => setActiveTab('orders')}
-                />
-                <OverviewCard
-                  title={t('overviewInvoiceProfiles')}
-                  count={enterpriseInvoiceProfiles.length}
-                  body={
-                    canManageInvoices
-                      ? t('overviewInvoiceProfilesHint')
-                      : t('overviewInvoiceProfilesReadonly')
-                  }
-                  onClick={() => setActiveTab(canManageInvoices ? 'invoices' : 'orders')}
-                />
-              </section>
+              <div className="space-y-4">
+                <section className="grid gap-4 md:grid-cols-3">
+                  <OverviewCard
+                    title={t('overviewOrders')}
+                    count={pendingOrderActions}
+                    body={
+                      pendingOrderActions > 0
+                        ? t('overviewOrdersBody', { count: pendingOrderActions })
+                        : t('overviewOrdersEmpty')
+                    }
+                    onClick={() => setActiveTab('orders')}
+                  />
+                  <OverviewCard
+                    title={t('overviewProjectActions')}
+                    count={projectContinuationCount}
+                    body={
+                      projectContinuationCount > 0
+                        ? t('overviewProjectActionsBody', {
+                            handoffs: continuableHandoffs.length,
+                            quotes: pendingQuotes.length,
+                          })
+                        : t('overviewProjectActionsEmpty')
+                    }
+                  />
+                  <OverviewCard
+                    title={t('overviewInvoiceProfiles')}
+                    count={enterpriseInvoiceProfiles.length}
+                    body={
+                      canManageInvoices
+                        ? t('overviewInvoiceProfilesHint')
+                        : t('overviewInvoiceProfilesReadonly')
+                    }
+                    onClick={() => setActiveTab(canManageInvoices ? 'invoices' : 'orders')}
+                  />
+                </section>
+
+                {projectContinuationCount > 0 && (
+                  <section className="bg-bg-elevated rounded-lg p-3 md:p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2.5">
+                          <GitBranch className="text-brand-500 size-4 md:size-5" />
+                          <h2 className="text-text-strong text-base font-semibold md:text-lg">
+                            {t('projectHandoffTitle')}
+                          </h2>
+                        </div>
+                        <p className="text-text-muted mt-1 text-sm leading-relaxed">
+                          {t('projectHandoffHint')}
+                        </p>
+                      </div>
+                      <p className="text-text-muted text-sm">
+                        {t('projectHandoffCount', { count: projectContinuationCount })}
+                      </p>
+                    </div>
+                    <div className="mt-3 grid items-start gap-3 xl:grid-cols-2">
+                      {continuableHandoffs.length > 0 && (
+                        <ProjectActionGroup
+                          compact
+                          icon={<GitBranch className="text-brand-500 size-4" />}
+                          title={t('handoffTitle')}
+                          hint={t('handoffHint')}
+                          count={t('handoffCount', { count: continuableHandoffs.length })}
+                        >
+                          {continuableHandoffs.map((handoff) => (
+                            <HandoffRow
+                              compact
+                              key={handoff.id}
+                              handoff={handoff}
+                              locale={locale}
+                              canAccept={isAuthenticated && profile.role !== 'engineer'}
+                              onAccept={() => acceptOsHandoff(handoff.projectId)}
+                              labels={{
+                                status: t(`handoffStatus.${handoff.status}`),
+                                itemCount: t('handoffItems', { count: handoff.itemCount }),
+                                submittedBy: t('submittedBy', {
+                                  name: handoff.submittedBy ?? t('engineer'),
+                                }),
+                                acceptedBy: handoff.acceptedBy
+                                  ? t('handoffAcceptedBy', { name: handoff.acceptedBy })
+                                  : '',
+                                orderNo: handoff.submittedOrderNo
+                                  ? t('handoffOrderNo', { orderNo: handoff.submittedOrderNo })
+                                  : '',
+                                continueCheckout: t('handoffContinue'),
+                                locked:
+                                  profile.role === 'engineer'
+                                    ? t('engineerCanReviewProject')
+                                    : t('orderLocked'),
+                              }}
+                            />
+                          ))}
+                        </ProjectActionGroup>
+                      )}
+                      {pendingQuotes.length > 0 && (
+                        <ProjectActionGroup
+                          compact
+                          icon={<FileCheck2 className="text-brand-500 size-4" />}
+                          title={t('quotesTitle')}
+                          hint={t('quotesHint')}
+                          count={t('quoteCount', { count: pendingQuotes.length })}
+                        >
+                          {pendingQuotes.map((request) => (
+                            <QuoteRequestRow
+                              compact
+                              key={request.requestNo}
+                              request={request}
+                              locale={locale}
+                              canProvide={false}
+                              canAccept={
+                                isAuthenticated &&
+                                profile.role !== 'engineer' &&
+                                request.status === 'quoted'
+                              }
+                              onProvide={() => undefined}
+                              onAccept={() => acceptLocalQuote(request.requestNo)}
+                              labels={{
+                                lines: t('quoteLines'),
+                                submittedBy: t('submittedBy', {
+                                  name: request.submittedBy ?? t('engineer'),
+                                }),
+                                estimate: t('quoteEstimate'),
+                                noEstimate: t('quoteNoEstimate'),
+                                provide: t('provideQuote'),
+                                accept: t('acceptQuote'),
+                                locked:
+                                  profile.role === 'engineer'
+                                    ? t('engineerCanReviewProject')
+                                    : t('orderLocked'),
+                                status: t(`quoteStatus.${request.status}`),
+                              }}
+                            />
+                          ))}
+                        </ProjectActionGroup>
+                      )}
+                    </div>
+                  </section>
+                )}
+              </div>
             )}
 
             {isEnterpriseAdmin && activeTab === 'members' && (
@@ -571,7 +683,10 @@ export function AccountPanel() {
                 memberForm={memberForm}
                 setMemberForm={setMemberForm}
                 updateProfile={updateProfile}
+                updateEnterpriseProfile={updateEnterpriseProfile}
+                updateMemberProfile={updateMemberProfile}
                 toggleMemberPermission={toggleMemberPermission}
+                deleteMember={deleteMember}
                 activateMember={activateMember}
                 onSubmit={handleMemberSubmit}
               />
@@ -622,144 +737,64 @@ export function AccountPanel() {
                   </div>
                 ) : (
                   <div className="mt-3 space-y-3 md:mt-4">
-                    {(enterpriseOsHandoffs.length > 0 || enterpriseQuoteRequests.length > 0) && (
-                      <div className="grid gap-4 xl:grid-cols-2">
-                        {enterpriseOsHandoffs.length > 0 && (
-                          <ProjectActionGroup
-                            icon={<GitBranch className="text-brand-500 size-5" />}
-                            title={t('handoffTitle')}
-                            hint={t('handoffHint')}
-                            count={t('handoffCount', { count: enterpriseOsHandoffs.length })}
-                            showAllLabel={t('showAllActions', {
-                              count: enterpriseOsHandoffs.length,
-                            })}
-                            collapseLabel={t('collapseActions')}
-                          >
-                            {enterpriseOsHandoffs.map((handoff) => (
-                              <HandoffRow
-                                key={handoff.id}
-                                handoff={handoff}
-                                locale={locale}
-                                canAccept={isAuthenticated && profile.role !== 'engineer'}
-                                onAccept={() => acceptOsHandoff(handoff.projectId)}
-                                labels={{
-                                  status: t(`handoffStatus.${handoff.status}`),
-                                  itemCount: t('handoffItems', { count: handoff.itemCount }),
-                                  submittedBy: t('submittedBy', {
-                                    name: handoff.submittedBy ?? t('engineer'),
-                                  }),
-                                  acceptedBy: handoff.acceptedBy
-                                    ? t('handoffAcceptedBy', { name: handoff.acceptedBy })
-                                    : '',
-                                  orderNo: handoff.submittedOrderNo
-                                    ? t('handoffOrderNo', { orderNo: handoff.submittedOrderNo })
-                                    : '',
-                                  continueCheckout: t('handoffContinue'),
-                                  locked:
-                                    profile.role === 'engineer'
-                                      ? t('engineerCannotProcess')
-                                      : t('orderLocked'),
-                                }}
-                              />
-                            ))}
-                          </ProjectActionGroup>
-                        )}
-                        {enterpriseQuoteRequests.length > 0 && (
-                          <ProjectActionGroup
-                            icon={<FileCheck2 className="text-brand-500 size-5" />}
-                            title={t('quotesTitle')}
-                            hint={t('quotesHint')}
-                            count={t('quoteCount', { count: enterpriseQuoteRequests.length })}
-                            showAllLabel={t('showAllActions', {
-                              count: enterpriseQuoteRequests.length,
-                            })}
-                            collapseLabel={t('collapseActions')}
-                          >
-                            {enterpriseQuoteRequests.map((request) => (
-                              <QuoteRequestRow
-                                key={request.requestNo}
-                                request={request}
-                                locale={locale}
-                                canProvide={false}
-                                canAccept={
-                                  isAuthenticated &&
-                                  profile.role !== 'engineer' &&
-                                  request.status === 'quoted'
-                                }
-                                onProvide={() => undefined}
-                                onAccept={() => acceptLocalQuote(request.requestNo)}
-                                labels={{
-                                  lines: t('quoteLines'),
-                                  submittedBy: t('submittedBy', {
-                                    name: request.submittedBy ?? t('engineer'),
-                                  }),
-                                  estimate: t('quoteEstimate'),
-                                  noEstimate: t('quoteNoEstimate'),
-                                  provide: t('provideQuote'),
-                                  accept: t('acceptQuote'),
-                                  locked:
-                                    profile.role === 'engineer'
-                                      ? t('engineerCannotProcess')
-                                      : t('orderLocked'),
-                                  status: t(`quoteStatus.${request.status}`),
-                                }}
-                              />
-                            ))}
-                          </ProjectActionGroup>
-                        )}
-                      </div>
-                    )}
-
-                    {(actionableApprovalOrders.length > 0 ||
-                      payableOrders.length > 0 ||
-                      receivableOrders.length > 0) && (
-                      <div className="bg-bg-surface flex flex-col gap-3 rounded-lg p-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
+                    <section className="bg-bg-surface rounded-lg p-3">
+                      <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0">
                           <p className="text-text-strong font-medium">{t('actionQueueTitle')}</p>
                           <p className="text-text-muted mt-1 text-sm">{t('actionQueueHint')}</p>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {actionableApprovalOrders.length > 0 && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setStatusFilter('pending-approval')}
-                            >
-                              <FileCheck2 className="size-4" />
-                              <span>
-                                {t('showPendingApproval', {
-                                  count: actionableApprovalOrders.length,
-                                })}
-                              </span>
-                            </Button>
-                          )}
-                          {payableOrders.length > 0 && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setStatusFilter('pending-payment')}
-                            >
-                              <CircleDollarSign className="size-4" />
-                              <span>{t('showPendingPayment', { count: payableOrders.length })}</span>
-                            </Button>
-                          )}
-                          {receivableOrders.length > 0 && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setStatusFilter('shipped')}
-                            >
-                              <ClipboardCheck className="size-4" />
-                              <span>
-                                {t('showPendingReceipt', { count: receivableOrders.length })}
-                              </span>
-                            </Button>
-                          )}
-                        </div>
+                        {actionableApprovalOrders.length > 0 ||
+                        payableOrders.length > 0 ||
+                        receivableOrders.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {actionableApprovalOrders.length > 0 && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setStatusFilter('pending-approval')}
+                              >
+                                <FileCheck2 className="size-4" />
+                                <span>
+                                  {t('showPendingApproval', {
+                                    count: actionableApprovalOrders.length,
+                                  })}
+                                </span>
+                              </Button>
+                            )}
+                            {payableOrders.length > 0 && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setStatusFilter('pending-payment')}
+                              >
+                                <CircleDollarSign className="size-4" />
+                                <span>
+                                  {t('showPendingPayment', { count: payableOrders.length })}
+                                </span>
+                              </Button>
+                            )}
+                            {receivableOrders.length > 0 && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setStatusFilter('shipped')}
+                              >
+                                <ClipboardCheck className="size-4" />
+                                <span>
+                                  {t('showPendingReceipt', { count: receivableOrders.length })}
+                                </span>
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="bg-bg-control text-text-muted inline-flex min-h-[36px] items-center rounded-sm px-3 text-sm">
+                            {t('noActionQueue')}
+                          </span>
+                        )}
                       </div>
-                    )}
+                    </section>
 
-                    <div className="bg-bg-surface rounded-lg p-2.5 md:p-3">
+                    <section className="bg-bg-surface rounded-lg p-2.5 md:p-3">
                       <button
                         type="button"
                         className="flex min-h-[36px] w-full items-center justify-between gap-2 text-left lg:pointer-events-none"
@@ -768,7 +803,12 @@ export function AccountPanel() {
                       >
                         <span className="flex items-center gap-2">
                           <ListFilter className="text-brand-500 size-4" />
-                          <span className="text-text-strong font-medium">{t('filterOrders')}</span>
+                          <span className="text-text-strong font-medium">
+                            {t('allOrderRecords')}
+                          </span>
+                        </span>
+                        <span className="text-text-muted hidden text-sm sm:inline">
+                          {t('filteredOrderCount', { count: filteredOrders.length })}
                         </span>
                         <ChevronDown
                           className={cn(
@@ -789,7 +829,7 @@ export function AccountPanel() {
                                   key={filter.key}
                                   type="button"
                                   onClick={() => setStatusFilter(filter.key)}
-                                  className={`inline-flex h-[36px] items-center rounded-sm px-2.5 text-md transition-colors ${
+                                  className={`text-md inline-flex h-[36px] items-center rounded-sm px-2.5 transition-colors ${
                                     statusFilter === filter.key
                                       ? 'bg-bg-elevated text-text-strong font-semibold'
                                       : 'bg-bg-control text-text-muted hover:text-text'
@@ -805,7 +845,7 @@ export function AccountPanel() {
                               {t('filterProject')}
                             </p>
                             <Select value={projectFilter} onValueChange={setProjectFilter}>
-                              <SelectTrigger size="sm" className="w-full text-md">
+                              <SelectTrigger size="sm" className="text-md w-full">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent className="max-h-72">
@@ -846,12 +886,12 @@ export function AccountPanel() {
                               }}
                             />
                           </div>
-                          <p className="text-text-muted mt-3 text-sm">
+                          <p className="text-text-muted mt-3 text-sm sm:hidden">
                             {t('filteredOrderCount', { count: filteredOrders.length })}
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </section>
 
                     {filteredOrders.length === 0 ? (
                       <div className="bg-bg-surface rounded-lg p-4">
@@ -1036,7 +1076,10 @@ function MemberManagementPanel({
   memberForm,
   setMemberForm,
   updateProfile,
+  updateEnterpriseProfile,
+  updateMemberProfile,
   toggleMemberPermission,
+  deleteMember,
   activateMember,
   onSubmit,
 }: {
@@ -1045,11 +1088,99 @@ function MemberManagementPanel({
   memberForm: MemberFormState;
   setMemberForm: React.Dispatch<React.SetStateAction<MemberFormState>>;
   updateProfile: (patch: Partial<EnterpriseProfile>) => void;
+  updateEnterpriseProfile: (enterpriseId: string, companyName: string, actor?: string) => void;
+  updateMemberProfile: (
+    memberId: string,
+    patch: { name?: string; email?: string; phone?: string; roleName?: string },
+    actor?: string,
+  ) => void;
   toggleMemberPermission: (memberId: string, permission: AdminPermission, actor?: string) => void;
+  deleteMember: (memberId: string, actor?: string) => void;
   activateMember: (memberId: string, actor?: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
   const t = useTranslations('Account');
+  const [enterpriseDraft, setEnterpriseDraft] = useState({
+    companyName: profile.companyName,
+  });
+  const [memberDrafts, setMemberDrafts] = useState<
+    Record<string, { name: string; email: string; phone: string; roleName: string }>
+  >({});
+
+  useEffect(() => {
+    setEnterpriseDraft({ companyName: profile.companyName });
+  }, [profile.companyName]);
+
+  useEffect(() => {
+    setMemberDrafts((current) => {
+      const nextDrafts: Record<
+        string,
+        { name: string; email: string; phone: string; roleName: string }
+      > = {};
+      members.forEach((member) => {
+        nextDrafts[member.id] = current[member.id] ?? {
+          name: member.name,
+          email: member.email,
+          phone: member.phone ?? '',
+          roleName: member.roleName ?? '',
+        };
+      });
+      return nextDrafts;
+    });
+  }, [members]);
+
+  function saveEnterpriseProfile() {
+    const companyName = enterpriseDraft.companyName.trim();
+    if (!companyName || companyName === profile.companyName) return;
+    updateEnterpriseProfile(profile.enterpriseId, companyName, profile.contactName);
+    updateProfile({ companyName });
+  }
+
+  function updateMemberDraft(
+    memberId: string,
+    patch: Partial<{ name: string; email: string; phone: string; roleName: string }>,
+  ) {
+    setMemberDrafts((current) => ({
+      ...current,
+      [memberId]: {
+        name: current[memberId]?.name ?? '',
+        email: current[memberId]?.email ?? '',
+        phone: current[memberId]?.phone ?? '',
+        roleName: current[memberId]?.roleName ?? '',
+        ...patch,
+      },
+    }));
+  }
+
+  function saveMember(member: AdminMember) {
+    const draft = memberDrafts[member.id];
+    if (!draft) return;
+
+    const name = draft.name.trim();
+    const email = draft.email.trim().toLowerCase();
+    const phone = draft.phone.trim();
+    const roleName = draft.roleName.trim();
+    if (!name || !email) return;
+
+    updateMemberProfile(
+      member.id,
+      {
+        name,
+        email,
+        phone,
+        roleName,
+      },
+      profile.contactName,
+    );
+
+    if (profile.email === member.email) {
+      updateProfile({
+        contactName: name,
+        email,
+        phone,
+      });
+    }
+  }
 
   return (
     <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
@@ -1137,12 +1268,28 @@ function MemberManagementPanel({
         </form>
 
         <div className="bg-bg-surface rounded-lg p-4">
-          <h3 className="text-text-strong font-semibold">{t('enterpriseProfileTitle')}</h3>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="text-text-strong font-semibold">{t('enterpriseProfileTitle')}</h3>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-full sm:w-fit"
+              disabled={
+                !enterpriseDraft.companyName.trim() ||
+                enterpriseDraft.companyName.trim() === profile.companyName
+              }
+              onClick={saveEnterpriseProfile}
+            >
+              <Save className="size-4" />
+              <span>{t('saveEnterpriseProfile')}</span>
+            </Button>
+          </div>
           <div className="mt-4 space-y-4">
             <Field label={t('companyName')}>
               <Input
-                value={profile.companyName}
-                onChange={(event) => updateProfile({ companyName: event.target.value })}
+                value={enterpriseDraft.companyName}
+                onChange={(event) => setEnterpriseDraft({ companyName: event.target.value })}
               />
             </Field>
             <Field label={t('enterpriseId')}>
@@ -1156,30 +1303,70 @@ function MemberManagementPanel({
         <h3 className="text-text-strong font-semibold">{t('permissionsTitle')}</h3>
         <div className="mt-3 space-y-3">
           {members.map((member) => {
-            const Icon = roleIcons[member.role];
             const isCurrentMember = profile.email === member.email;
             const isEnterpriseOwner = member.role === 'admin';
+            const canDeleteMember = !isCurrentMember && !isEnterpriseOwner;
+            const draft = memberDrafts[member.id] ?? {
+              name: member.name,
+              email: member.email,
+              phone: member.phone ?? '',
+              roleName: member.roleName ?? '',
+            };
+            const memberDirty =
+              draft.name.trim() !== member.name ||
+              draft.email.trim().toLowerCase() !== member.email ||
+              draft.phone.trim() !== (member.phone ?? '') ||
+              draft.roleName.trim() !== (member.roleName ?? '');
 
             return (
-              <article
-                key={member.id}
-                className="bg-bg-surface min-w-0 rounded-lg p-4"
-              >
-                <div className="grid gap-4 xl:grid-cols-[minmax(220px,1fr)_minmax(260px,1fr)_auto] xl:items-center">
-                  <div className="min-w-0">
-	                    <div className="flex items-center gap-2">
-	                      <Icon className="text-brand-500 size-4 shrink-0" />
-	                      <p className="text-text-strong truncate font-semibold">{member.name}</p>
-	                    </div>
-	                    {member.roleName && (
-	                      <p className="text-text mt-1 truncate text-sm">
-	                        {t('memberRoleName')}: {member.roleName}
-	                      </p>
-	                    )}
-	                    <p className="text-text-muted mt-1 truncate text-sm">{member.email}</p>
-                    {member.phone && (
-                      <p className="text-text-muted mt-1 truncate text-xs">{member.phone}</p>
-                    )}
+              <article key={member.id} className="bg-bg-surface min-w-0 rounded-lg p-4">
+                <div className="grid gap-4 xl:grid-cols-[minmax(260px,1.2fr)_minmax(260px,1fr)_auto] xl:items-start">
+                  <div className="min-w-0 space-y-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Field
+                        label={t('memberName')}
+                        labelSuffix={
+                          isCurrentMember ? (
+                            <Badge variant="standard">{t('memberActive')}</Badge>
+                          ) : undefined
+                        }
+                      >
+                        <Input
+                          value={draft.name}
+                          onChange={(event) =>
+                            updateMemberDraft(member.id, { name: event.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label={t('memberEmail')}>
+                        <Input
+                          value={draft.email}
+                          placeholder={t('memberEmailPlaceholder')}
+                          onChange={(event) =>
+                            updateMemberDraft(member.id, { email: event.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label={t('memberPhone')}>
+                        <Input
+                          value={draft.phone}
+                          placeholder={t('memberPhonePlaceholder')}
+                          onChange={(event) =>
+                            updateMemberDraft(member.id, { phone: event.target.value })
+                          }
+                        />
+                      </Field>
+                      <Field label={t('memberRoleName')}>
+                        <Input
+                          value={draft.roleName}
+                          disabled={isEnterpriseOwner}
+                          placeholder={isEnterpriseOwner ? t('adminRoleLocked') : undefined}
+                          onChange={(event) =>
+                            updateMemberDraft(member.id, { roleName: event.target.value })
+                          }
+                        />
+                      </Field>
+                    </div>
                   </div>
 
                   <div>
@@ -1196,14 +1383,32 @@ function MemberManagementPanel({
                     />
                   </div>
 
-                  <div className="flex items-center gap-2 xl:justify-end">
-                    <Badge variant={member.status === 'active' ? 'in-stock' : 'secondary'}>
-                      {isCurrentMember
-                        ? t('memberActive')
-                        : member.status === 'active'
-                          ? t('memberEnabled')
-                          : t('memberInvited')}
-                    </Badge>
+                  <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                    {member.status === 'invited' && (
+                      <Badge variant="secondary">{t('memberInvited')}</Badge>
+                    )}
+                    <Button
+                      type="button"
+                      variant="icon"
+                      size="icon"
+                      disabled={!draft.name.trim() || !draft.email.trim() || !memberDirty}
+                      onClick={() => saveMember(member)}
+                      aria-label={t('saveMemberProfile')}
+                      title={t('saveMemberProfile')}
+                    >
+                      <Save className="size-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="icon"
+                      size="icon"
+                      disabled={!canDeleteMember}
+                      onClick={() => deleteMember(member.id, profile.contactName)}
+                      aria-label={t('deleteMemberProfile')}
+                      title={t('deleteMemberProfile')}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                     {member.status === 'invited' && (
                       <Button
                         type="button"
@@ -1624,7 +1829,11 @@ function InvoiceManagementPanel({
                     <p className="text-text-muted mt-1 truncate">{invoice.title}</p>
                     <p className="text-text-muted mt-1 truncate">{invoice.taxId}</p>
                   </div>
-                  <Button variant="secondary" size="sm" onClick={() => applyInvoiceProfile(invoice.id)}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => applyInvoiceProfile(invoice.id)}
+                  >
                     {t('useInvoiceProfile')}
                   </Button>
                   <Button
@@ -1649,7 +1858,9 @@ function InvoiceManagementPanel({
             <h3 className="text-text-strong font-semibold">{t('invoiceHistoryTitle')}</h3>
             <p className="text-text-muted mt-1 text-sm">{t('invoiceHistoryHint')}</p>
           </div>
-          <Badge variant="secondary">{t('invoiceHistoryCount', { count: invoiceHistory.length })}</Badge>
+          <Badge variant="secondary">
+            {t('invoiceHistoryCount', { count: invoiceHistory.length })}
+          </Badge>
         </div>
 
         {invoiceHistory.length === 0 ? (
@@ -1675,11 +1886,7 @@ function InvoiceManagementPanel({
                 <div className="text-sm lg:text-right">
                   <p className="text-text-muted">{formatDate(order.submittedAt, locale)}</p>
                   <p className="text-text-strong mt-1 font-semibold tabular-nums">
-                    {formatPrice(
-                      order.subtotalCents,
-                      'CNY',
-                      locale === 'zh' ? 'zh-CN' : 'en-US',
-                    )}
+                    {formatPrice(order.subtotalCents, 'CNY', locale === 'zh' ? 'zh-CN' : 'en-US')}
                   </p>
                   {order.paymentReference && (
                     <p className="text-text-muted mt-1 text-xs">{order.paymentReference}</p>
@@ -1709,65 +1916,60 @@ function OverviewCard({
   title: string;
   count: number;
   body: string;
-  onClick: () => void;
+  onClick?: () => void;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="bg-bg-elevated hover:bg-bg-control min-h-[88px] rounded-lg p-3 text-left transition-colors"
-    >
+  const className =
+    'bg-bg-elevated min-h-[88px] rounded-lg p-3 text-left transition-colors' +
+    (onClick ? ' hover:bg-bg-control' : '');
+  const content = (
+    <>
       <span className="text-text-muted text-sm">{title}</span>
       <span className="text-text-strong mt-2 block text-2xl font-semibold tabular-nums">
         {count}
       </span>
       <span className="text-text-muted mt-1.5 block text-sm leading-relaxed">{body}</span>
+    </>
+  );
+
+  if (!onClick) {
+    return <div className={className}>{content}</div>;
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
     </button>
   );
 }
 
-function ProjectActionGroup({
+export function ProjectActionGroup({
   icon,
   title,
   hint,
   count,
   children,
-  showAllLabel,
-  collapseLabel,
+  compact = false,
 }: {
   icon: React.ReactNode;
   title: string;
   hint: string;
   count: string;
   children: React.ReactNode;
-  showAllLabel: string;
-  collapseLabel: string;
+  compact?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const childItems = Children.toArray(children);
-  const visibleItems = expanded ? childItems : childItems.slice(0, 1);
-  const hasHiddenItems = childItems.length > visibleItems.length || expanded;
-
   return (
-    <div className="bg-bg-surface rounded-lg p-[16px]">
-      <div className="flex flex-col gap-[12px] sm:flex-row sm:items-start sm:justify-between">
+    <div className={cn(compact ? 'bg-bg-elevated rounded-md p-3' : 'bg-bg-surface rounded-lg p-4')}>
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-[12px]">
+          <div className="flex items-center gap-2.5">
             {icon}
-            <h3 className="text-text-strong text-lg font-semibold">{title}</h3>
+            <h3 className="text-text-strong text-base font-semibold">{title}</h3>
           </div>
-          <p className="text-text-muted mt-[8px] text-sm leading-relaxed">{hint}</p>
+          <p className="text-text-muted mt-1.5 text-sm leading-relaxed">{hint}</p>
         </div>
         <Badge variant="standard">{count}</Badge>
       </div>
-      <div className="mt-[16px] flex flex-col gap-[12px]">{visibleItems}</div>
-      {hasHiddenItems && (
-        <div className="mt-[12px] flex justify-center">
-          <Button variant="secondary" size="sm" onClick={() => setExpanded((value) => !value)}>
-            <span>{expanded ? collapseLabel : showAllLabel}</span>
-          </Button>
-        </div>
-      )}
+      <div className="mt-3 flex flex-col gap-2.5">{children}</div>
     </div>
   );
 }
@@ -1908,7 +2110,7 @@ export function OrderRow({
         </Button>
       )}
       {!canApprove && !canPay && !canAdvance && showDetails && !detailOnly && (
-        <span className="text-text-muted bg-bg-control inline-flex h-[36px] items-center rounded-sm px-3 text-md">
+        <span className="text-text-muted bg-bg-control text-md inline-flex h-[36px] items-center rounded-sm px-3">
           {labels.locked}
         </span>
       )}
@@ -1978,9 +2180,7 @@ export function OrderRow({
       )}
 
       {(!detailOnly || !showDetails) && (
-        <div
-          className={`${detailOnly ? '' : 'mt-3'} flex flex-wrap items-center gap-1.5 md:gap-2`}
-        >
+        <div className={`${detailOnly ? '' : 'mt-3'} flex flex-wrap items-center gap-1.5 md:gap-2`}>
           {actionControls}
         </div>
       )}
@@ -2121,17 +2321,19 @@ export function OrderRow({
   );
 }
 
-function HandoffRow({
+export function HandoffRow({
   handoff,
   locale,
   canAccept,
   onAccept,
   labels,
+  compact = false,
 }: {
   handoff: LocalOsHandoff;
   locale: string;
   canAccept: boolean;
   onAccept: () => void;
+  compact?: boolean;
   labels: {
     status: string;
     itemCount: string;
@@ -2143,7 +2345,9 @@ function HandoffRow({
   };
 }) {
   return (
-    <article className="bg-bg-surface rounded-lg p-4">
+    <article
+      className={cn(compact ? 'bg-bg-surface rounded-md p-3' : 'bg-bg-surface rounded-lg p-4')}
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -2182,7 +2386,7 @@ function HandoffRow({
   );
 }
 
-function QuoteRequestRow({
+export function QuoteRequestRow({
   request,
   locale,
   canProvide,
@@ -2190,6 +2394,7 @@ function QuoteRequestRow({
   onProvide,
   onAccept,
   labels,
+  compact = false,
 }: {
   request: LocalQuoteRequest;
   locale: string;
@@ -2197,6 +2402,7 @@ function QuoteRequestRow({
   canAccept: boolean;
   onProvide: () => void;
   onAccept: () => void;
+  compact?: boolean;
   labels: {
     lines: string;
     submittedBy: string;
@@ -2209,7 +2415,9 @@ function QuoteRequestRow({
   };
 }) {
   return (
-    <article className="bg-bg-surface rounded-lg p-4">
+    <article
+      className={cn(compact ? 'bg-bg-surface rounded-md p-3' : 'bg-bg-surface rounded-lg p-4')}
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -2224,7 +2432,12 @@ function QuoteRequestRow({
             <span>{labels.submittedBy}</span>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[300px]">
+        <div
+          className={cn(
+            'grid gap-3 sm:grid-cols-2',
+            compact ? 'grid-cols-2 lg:min-w-0' : 'lg:min-w-[300px]',
+          )}
+        >
           <div>
             <p className="text-text-muted text-xs">{labels.lines}</p>
             <p className="text-text-strong mt-1 font-medium tabular-nums">{request.lines.length}</p>
@@ -2240,7 +2453,7 @@ function QuoteRequestRow({
         </div>
       </div>
 
-      <div className="divide-divider mt-3 hidden divide-y lg:block">
+      <div className={cn('divide-divider mt-3 hidden divide-y lg:block', compact && 'lg:hidden')}>
         {request.lines.map((line) => (
           <div
             key={`${request.requestNo}-${line.productId}`}
@@ -2387,16 +2600,21 @@ function orderApprovalFlowSteps(
 
 function Field({
   label,
+  labelSuffix,
   className,
   children,
 }: {
   label: string;
+  labelSuffix?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }) {
   return (
     <label className={className}>
-      <span className="text-text-muted mb-2 block text-sm">{label}</span>
+      <span className="text-text-muted mb-2 flex min-h-[22px] items-center gap-2 text-sm">
+        <span>{label}</span>
+        {labelSuffix}
+      </span>
       {children}
     </label>
   );

@@ -69,8 +69,14 @@ export function OrderCenter() {
   const [customTimeRange, setCustomTimeRange] = useState<OrderDateRange>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleOrderCount, setVisibleOrderCount] = useState(ORDER_PAGE_SIZE);
-  const { isAuthenticated, profile, orders, approveLocalOrder, markLocalOrderPaid, advanceLocalOrder } =
-    useProcurementStore();
+  const {
+    isAuthenticated,
+    profile,
+    orders,
+    approveLocalOrder,
+    markLocalOrderPaid,
+    advanceLocalOrder,
+  } = useProcurementStore();
   const adminMembers = useAdminStore((state) => state.members);
   const approvalSettings = useAdminStore((state) => state.approvalSettings);
   const enterpriseOrders = useMemo(
@@ -139,7 +145,12 @@ export function OrderCenter() {
       enterpriseOrders.filter(
         (order) =>
           order.status === 'pending-payment' &&
-          canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'paymentInvoice'),
+          canHandleWorkflowRole(
+            profile,
+            enterpriseApprovalSettings,
+            adminMembers,
+            'paymentInvoice',
+          ),
       ),
     [adminMembers, enterpriseApprovalSettings, enterpriseOrders, profile],
   );
@@ -252,61 +263,67 @@ export function OrderCenter() {
           </div>
         ) : (
           <div className="mt-2.5 space-y-2.5 md:mt-4 md:space-y-3">
-            {(actionableApprovalOrders.length > 0 ||
-              payableOrders.length > 0 ||
-              receivableOrders.length > 0) && (
-              <div className="bg-bg-surface flex flex-wrap items-center justify-between gap-2 rounded-lg p-2.5">
-                <div>
+            <section className="bg-bg-surface rounded-lg p-3">
+              <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
                   <p className="text-text-strong font-medium">{tAccount('actionQueueTitle')}</p>
-                  <p className="text-text-muted mt-1 hidden text-sm xl:block">
-                    {tAccount('actionQueueHint')}
-                  </p>
+                  <p className="text-text-muted mt-1 text-sm">{tAccount('actionQueueHint')}</p>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {actionableApprovalOrders.length > 0 && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="h-[36px] px-3"
-                      onClick={() => setStatusFilter('pending-approval')}
-                    >
-                      <FileCheck2 className="size-4" />
-                      <span>
-                        {tAccount('showPendingApproval', {
-                          count: actionableApprovalOrders.length,
-                        })}
-                      </span>
-                    </Button>
-                  )}
-                  {payableOrders.length > 0 && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="h-[36px] px-3"
-                      onClick={() => setStatusFilter('pending-payment')}
-                    >
-                      <CircleDollarSign className="size-4" />
-                      <span>{tAccount('showPendingPayment', { count: payableOrders.length })}</span>
-                    </Button>
-                  )}
-                  {receivableOrders.length > 0 && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="h-[36px] px-3"
-                      onClick={() => setStatusFilter('shipped')}
-                    >
-                      <ClipboardCheck className="size-4" />
-                      <span>
-                        {tAccount('showPendingReceipt', { count: receivableOrders.length })}
-                      </span>
-                    </Button>
-                  )}
-                </div>
+                {actionableApprovalOrders.length > 0 ||
+                payableOrders.length > 0 ||
+                receivableOrders.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {actionableApprovalOrders.length > 0 && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="h-[36px] px-3"
+                        onClick={() => setStatusFilter('pending-approval')}
+                      >
+                        <FileCheck2 className="size-4" />
+                        <span>
+                          {tAccount('showPendingApproval', {
+                            count: actionableApprovalOrders.length,
+                          })}
+                        </span>
+                      </Button>
+                    )}
+                    {payableOrders.length > 0 && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="h-[36px] px-3"
+                        onClick={() => setStatusFilter('pending-payment')}
+                      >
+                        <CircleDollarSign className="size-4" />
+                        <span>
+                          {tAccount('showPendingPayment', { count: payableOrders.length })}
+                        </span>
+                      </Button>
+                    )}
+                    {receivableOrders.length > 0 && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="h-[36px] px-3"
+                        onClick={() => setStatusFilter('shipped')}
+                      >
+                        <ClipboardCheck className="size-4" />
+                        <span>
+                          {tAccount('showPendingReceipt', { count: receivableOrders.length })}
+                        </span>
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <span className="bg-bg-control text-text-muted inline-flex min-h-[36px] items-center rounded-sm px-3 text-sm">
+                    {tAccount('noActionQueue')}
+                  </span>
+                )}
               </div>
-            )}
+            </section>
 
-            <div className="bg-bg-surface rounded-lg p-2.5 md:p-3">
+            <section className="bg-bg-surface rounded-lg p-2.5 md:p-3">
               <button
                 type="button"
                 className="flex min-h-[36px] w-full items-center justify-between gap-2 text-left"
@@ -315,7 +332,9 @@ export function OrderCenter() {
               >
                 <span className="flex items-center gap-2">
                   <ListFilter className="text-brand-500 size-4" />
-                  <span className="text-text-strong font-medium">{tAccount('filterOrders')}</span>
+                  <span className="text-text-strong font-medium">
+                    {tAccount('allOrderRecords')}
+                  </span>
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="text-text-muted text-sm">
@@ -341,7 +360,7 @@ export function OrderCenter() {
                           key={filter.key}
                           type="button"
                           onClick={() => setStatusFilter(filter.key)}
-                          className={`inline-flex h-[36px] items-center rounded-sm px-2.5 text-md transition-colors ${
+                          className={`text-md inline-flex h-[36px] items-center rounded-sm px-2.5 transition-colors ${
                             statusFilter === filter.key
                               ? 'bg-bg-elevated text-text-strong font-semibold'
                               : 'bg-bg-control text-text-muted hover:text-text'
@@ -357,7 +376,7 @@ export function OrderCenter() {
                       {tAccount('filterProject')}
                     </p>
                     <Select value={projectFilter} onValueChange={setProjectFilter}>
-                      <SelectTrigger size="sm" className="w-full text-md">
+                      <SelectTrigger size="sm" className="text-md w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="max-h-72">
@@ -400,7 +419,7 @@ export function OrderCenter() {
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
             {filteredOrders.length === 0 ? (
               <div className="bg-bg-surface rounded-lg p-4">

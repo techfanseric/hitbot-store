@@ -44,7 +44,7 @@ export function CartBadge({ className, iconClassName }: CartBadgeProps) {
           </span>
         )}
       </Link>
-      <div className="invisible fixed top-[60px] right-5 left-5 z-50 pt-3 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 sm:absolute sm:top-full sm:right-0 sm:left-auto">
+      <div className="invisible fixed top-[60px] right-5 left-5 z-50 pt-3 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 sm:absolute sm:top-full sm:right-0 sm:left-auto">
         <div className="bg-bg-elevated text-text-strong shadow-popover w-full rounded-md p-2 sm:w-[320px]">
           <div className="px-2 py-2">
             <span className="block text-sm font-semibold">{t('title')}</span>
@@ -58,7 +58,7 @@ export function CartBadge({ className, iconClassName }: CartBadgeProps) {
             </div>
           ) : (
             <div className="py-1">
-              <div className="divide-divider max-h-[216px] overflow-y-auto divide-y">
+              <div className="divide-divider max-h-[216px] divide-y overflow-y-auto">
                 {previewItems.map((item) => {
                   const product = getProductById(item.productId);
                   if (!product) return null;
