@@ -6,6 +6,7 @@ import NextLink from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { CartBadge } from './cart-badge';
+import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
 import { useProcurementStore } from '@/lib/procurement-store';
 
 interface TopNavProps {
@@ -27,13 +28,20 @@ const officialNavItems = [
   },
 ] as const;
 
-export function TopNav({ locale: _locale }: TopNavProps) {
+export function TopNav({ locale }: TopNavProps) {
   const t = useTranslations('Nav');
   const tAccount = useTranslations('Account');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const authHydrated = useProcurementHydrated();
   const { isAuthenticated, profile, signOut } = useProcurementStore();
-  const accountLabel = isAuthenticated ? tAccount(profile.role) : t('login');
-  const accountHref = isAuthenticated ? '/store/account' : '/store/login';
+  const accountRoleLabel = tAccount(profile.role);
+  const effectiveAuthenticated = authHydrated && isAuthenticated;
+  const accountLabel = effectiveAuthenticated ? accountRoleLabel : t('account');
+  const accountHref = effectiveAuthenticated ? `/${locale}/account` : `/${locale}/login`;
+  const accountMeta =
+    effectiveAuthenticated && profile.contactName !== accountRoleLabel
+      ? `${profile.contactName} · ${accountRoleLabel}`
+      : accountRoleLabel;
 
   return (
     <header className="bg-neutral-0 sticky top-0 z-50 border-b border-[#EFEFEF] text-[#333]">
@@ -42,7 +50,7 @@ export function TopNav({ locale: _locale }: TopNavProps) {
           href="https://www.hitbot.cc/"
           target="_blank"
           rel="nofollow"
-          className="flex items-center"
+          className="flex min-h-[40px] items-center"
           aria-label="HITBOT 慧灵机器人 - 官网首页"
         >
           <Image
@@ -71,12 +79,12 @@ export function TopNav({ locale: _locale }: TopNavProps) {
             ))}
           </nav>
 
-          <div className="flex h-full items-center gap-[18px] lg:gap-[24px]">
+          <div className="flex h-full items-center gap-[10px] lg:gap-[18px]">
             <NextLink
-              href="/store/products"
+              href={`/${locale}/products`}
               aria-label={t('search')}
               title={t('search')}
-              className="inline-flex h-[32px] w-[32px] items-center justify-center text-[#333] transition-colors hover:text-[#A92424]"
+              className="inline-flex size-[40px] items-center justify-center text-[#333] transition-colors hover:text-[#A92424]"
             >
               <Image
                 src="/hitbot/icon-search.svg"
@@ -88,7 +96,7 @@ export function TopNav({ locale: _locale }: TopNavProps) {
             </NextLink>
 
             <CartBadge
-              className="h-[32px] w-[32px] rounded-none text-[#333] hover:bg-transparent hover:text-[#A92424]"
+              className="size-[40px] rounded-none text-[#333] hover:bg-transparent hover:text-[#A92424]"
               iconClassName="size-[18px] lg:size-[20px]"
             />
 
@@ -96,65 +104,67 @@ export function TopNav({ locale: _locale }: TopNavProps) {
               <NextLink
                 href={accountHref}
                 aria-label={accountLabel}
-                className="inline-flex h-[32px] w-[32px] shrink-0 items-center justify-center text-[#333] transition-colors hover:text-[#A92424]"
+                className="inline-flex size-[40px] shrink-0 items-center justify-center text-[#333] transition-colors hover:text-[#A92424]"
               >
                 <User className="size-[18px] lg:size-[20px]" />
               </NextLink>
               <div className="invisible absolute top-full right-0 z-50 pt-3 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
                 <div className="bg-bg-elevated text-text-strong shadow-popover w-[240px] rounded-md p-2">
-                {isAuthenticated ? (
-                  <>
-                    <div className="px-2 py-2">
-                      <span className="text-text-strong block truncate text-sm font-semibold">
-                        {profile.companyName}
-                      </span>
-                      <span className="text-text-muted mt-1 block truncate text-xs">
-                        {profile.contactName} · {tAccount(profile.role)}
-                      </span>
-                    </div>
-                    <div className="bg-divider -mx-1 my-1 h-px" />
-                    <NextLink
-                      href="/store/account"
-                      className="hover:bg-bg-control-hover flex min-h-[32px] items-center gap-2 rounded-sm px-2 text-sm transition-colors"
-                    >
+                  {effectiveAuthenticated ? (
+                    <>
+                      <div className="px-2 py-2">
+                        <span className="text-text-strong block truncate text-sm font-semibold">
+                          {profile.companyName}
+                        </span>
+                        <span className="text-text-muted mt-1 block truncate text-xs">
+                          {accountMeta}
+                        </span>
+                      </div>
+                      <div className="bg-divider -mx-1 my-1 h-px" />
+                      <NextLink
+                        href={`/${locale}/account`}
+                        className="hover:bg-bg-control-hover flex min-h-[36px] items-center gap-2 rounded-sm px-2 text-sm transition-colors"
+                      >
                         <User className="size-4" />
                         <span>{t('account')}</span>
-                    </NextLink>
-                    <NextLink
-                      href="/store/orders"
-                      className="hover:bg-bg-control-hover flex min-h-[32px] items-center gap-2 rounded-sm px-2 text-sm transition-colors"
-                    >
+                      </NextLink>
+                      <NextLink
+                        href={`/${locale}/orders`}
+                        className="hover:bg-bg-control-hover flex min-h-[36px] items-center gap-2 rounded-sm px-2 text-sm transition-colors"
+                      >
                         <ClipboardCheck className="size-4" />
                         <span>{t('ordersCenter')}</span>
-                    </NextLink>
-                    <div className="bg-divider -mx-1 my-1 h-px" />
-                    <button
-                      type="button"
-                      className="text-brand-500 hover:bg-brand-soft flex min-h-[32px] w-full items-center gap-2 rounded-sm px-2 text-left text-sm transition-colors"
-                      onClick={signOut}
-                    >
-                      <LogOut className="size-4" />
-                      <span>{t('signOut')}</span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="px-2 py-2">
-                      <span className="text-text-strong block text-sm font-semibold">
-                        {t('account')}
-                      </span>
-                      <span className="text-text-muted mt-1 block text-xs">{t('signInHint')}</span>
-                    </div>
-                    <div className="bg-divider -mx-1 my-1 h-px" />
-                    <NextLink
-                      href="/store/login"
-                      className="hover:bg-bg-control-hover flex min-h-[32px] items-center gap-2 rounded-sm px-2 text-sm transition-colors"
-                    >
+                      </NextLink>
+                      <div className="bg-divider -mx-1 my-1 h-px" />
+                      <button
+                        type="button"
+                        className="text-brand-500 hover:bg-brand-soft flex min-h-[36px] w-full items-center gap-2 rounded-sm px-2 text-left text-sm transition-colors"
+                        onClick={signOut}
+                      >
+                        <LogOut className="size-4" />
+                        <span>{t('signOut')}</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="px-2 py-2">
+                        <span className="text-text-strong block text-sm font-semibold">
+                          {t('account')}
+                        </span>
+                        <span className="text-text-muted mt-1 block text-xs">
+                          {t('signInHint')}
+                        </span>
+                      </div>
+                      <div className="bg-divider -mx-1 my-1 h-px" />
+                      <NextLink
+                        href={`/${locale}/login`}
+                        className="hover:bg-bg-control-hover flex min-h-[36px] items-center gap-2 rounded-sm px-2 text-sm transition-colors"
+                      >
                         <LogIn className="size-4" />
                         <span>{t('login')}</span>
-                    </NextLink>
-                  </>
-                )}
+                      </NextLink>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -164,7 +174,7 @@ export function TopNav({ locale: _locale }: TopNavProps) {
               aria-label="Menu"
               aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen((open) => !open)}
-              className="ml-2 inline-flex h-[32px] w-[32px] shrink-0 items-center justify-center text-[#333] lg:hidden"
+              className="ml-1 inline-flex size-[40px] shrink-0 items-center justify-center text-[#333] lg:hidden"
             >
               <Menu className="size-6" />
             </button>

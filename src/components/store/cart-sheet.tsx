@@ -70,7 +70,7 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
                   key={project.projectId}
                   type="button"
                   onClick={() => setProject(project.projectId)}
-                  className={`rounded-sm px-2 py-1 text-xs transition-colors ${
+                  className={`min-h-[36px] rounded-sm px-2 py-1 text-xs transition-colors ${
                     currentProjectId === project.projectId
                       ? 'bg-bg-elevated text-text-strong font-semibold'
                       : 'bg-bg-control text-text-muted hover:text-text'
@@ -141,9 +141,14 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
         </div>
         <div className="flex-1 overflow-y-auto">
           {hydrated && items.length === 0 ? (
-            <div className="text-text-muted flex h-full flex-col items-center justify-center gap-2 py-12 text-center">
-              <p>{t('empty')}</p>
-              <p className="text-sm">{t('emptyHint')}</p>
+            <div className="bg-bg-surface text-text-muted rounded-lg p-4">
+              <p className="text-text-strong text-base font-medium">{t('empty')}</p>
+              <p className="mt-1 text-sm">{t('emptyHint')}</p>
+              <Button variant="primary" className="mt-4 w-full" asChild>
+                <Link href={`/${locale}/products`} onClick={() => onOpenChange(false)}>
+                  {t('continueShopping')}
+                </Link>
+              </Button>
             </div>
           ) : (
             <div className="divide-divider divide-y">
@@ -177,7 +182,7 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
                   </Button>
                 ) : (
                   <Button variant="primary" className="flex-1" asChild>
-                    <Link href="/store/checkout" onClick={() => onOpenChange(false)}>
+                    <Link href={`/${locale}/checkout`} onClick={() => onOpenChange(false)}>
                       {t('checkout')}
                     </Link>
                   </Button>
@@ -185,9 +190,9 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
               </div>
               <p className="text-text-muted text-xs">{t('syncHint')}</p>
               <Link
-                href="/store/products"
+                href={`/${locale}/products`}
                 onClick={() => onOpenChange(false)}
-                className="text-text-muted block text-center text-sm"
+                className="text-text-muted hover:bg-bg-control-hover flex min-h-[36px] items-center justify-center rounded-sm text-sm transition-colors"
               >
                 {t('continueShopping')}
               </Link>

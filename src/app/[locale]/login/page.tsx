@@ -27,10 +27,12 @@ export default async function LoginPage({ params, searchParams }: LoginPageProps
 
   return (
     <div className="bg-bg-app">
-      <div className="mx-auto w-[90%] max-w-[1200px] py-12">
-        <div className="mb-8 text-center">
-          <p className="text-brand-500 text-lg font-medium">HITBOT Store</p>
-          <h1 className="text-text-strong mt-2 text-4xl font-semibold">{t('title')}</h1>
+      <div className="mx-auto w-[90%] max-w-[960px] py-[20px] md:py-[28px]">
+        <div className="mb-[16px] text-center">
+          <p className="text-brand-500 text-sm font-medium">HITBOT Store</p>
+          <h1 className="text-text-strong mt-1.5 text-2xl font-semibold md:text-3xl">
+            {t('title')}
+          </h1>
         </div>
         <LoginPanel next={next} />
       </div>

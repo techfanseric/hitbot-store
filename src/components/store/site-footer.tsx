@@ -11,10 +11,10 @@ export function SiteFooter() {
   const t = useTranslations('Footer');
   return (
     <footer className="bg-bg-surface">
-      <div className="mx-auto w-[90%] max-w-[1600px] pt-8 pb-6 md:pt-[53px] md:pb-[33px]">
+      <div className="mx-auto w-[90%] max-w-[1600px] pt-[32px] pb-[24px] lg:pt-[48px] lg:pb-[32px]">
         <a
           href="https://www.hitbot.cc/"
-          className="inline-flex items-center"
+          className="inline-flex min-h-[40px] items-center"
           aria-label="HITBOT 慧灵机器人 - 官网首页"
         >
           <Image
@@ -28,9 +28,9 @@ export function SiteFooter() {
       </div>
 
       <div className="mx-auto w-[90%] max-w-[1600px]">
-        <div className="grid grid-cols-1 gap-8 pb-8 md:grid-cols-12 md:gap-10 md:pb-10">
-          <div className="md:col-span-5">
-            <ul className="text-text-muted space-y-2.5 text-sm md:text-lg">
+        <div className="grid grid-cols-1 gap-[32px] pb-[32px] lg:grid-cols-12 lg:gap-[40px] lg:pb-[40px]">
+          <div className="lg:col-span-5">
+            <ul className="text-text-muted flex flex-col gap-[8px] text-sm lg:gap-[10px] lg:text-lg">
               <ContactRow icon="/hitbot/icon-phone.svg" label={t('serviceLabel')}>
                 <span>{t('servicePhoneValue')}</span>
               </ContactRow>
@@ -38,7 +38,10 @@ export function SiteFooter() {
                 <span>{t('supportPhoneValue')}</span>
               </ContactRow>
               <ContactRow icon="/hitbot/icon-mail.svg" label={t('emailLabel')}>
-                <a href="mailto:hitbot@hitbot.cc" className="text-text-muted hover:text-brand-500">
+                <a
+                  href="mailto:hitbot@hitbot.cc"
+                  className="text-text-muted inline-flex min-h-[36px] items-center hover:text-brand-500"
+                >
                   {t('emailValue')}
                 </a>
               </ContactRow>
@@ -49,14 +52,14 @@ export function SiteFooter() {
                 <span className="text-text-muted">{t('friendLinksList')}</span>
               </ContactRow>
             </ul>
-            <div className="mt-6 flex items-center gap-3 md:relative md:inline-flex">
-              <span className="text-text-strong text-sm md:text-lg">{t('followUs')}</span>
+            <div className="mt-[24px] flex items-center gap-[12px] lg:relative lg:inline-flex">
+              <span className="text-text-strong text-sm lg:text-lg">{t('followUs')}</span>
               <a
                 href="/hitbot/wechat-qr.jpg"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="微信公众号二维码"
-                className="group relative inline-flex size-[32px] items-center justify-center rounded-sm text-text-muted transition-colors hover:text-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/35 focus-visible:outline-none"
+                className="group relative inline-flex size-[40px] items-center justify-center rounded-sm text-text-muted transition-colors hover:text-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500/35 focus-visible:outline-none"
               >
                 <Image
                   src="/hitbot/icon-wechat.svg"
@@ -65,7 +68,7 @@ export function SiteFooter() {
                   height={17}
                   className="h-[17px] w-[21px]"
                 />
-                <span className="pointer-events-none absolute bottom-full left-1/2 mb-3 hidden h-[128px] w-[128px] -translate-x-1/2 rounded-md bg-bg-elevated p-2 shadow-popover group-hover:block group-focus-visible:block">
+                <span className="pointer-events-none absolute bottom-full left-1/2 mb-[12px] hidden h-[128px] w-[128px] -translate-x-1/2 rounded-md bg-bg-elevated p-[8px] shadow-popover group-hover:block group-focus-visible:block">
                   <Image
                     src="/hitbot/wechat-qr.jpg"
                     alt={t('wechatQrAlt')}
@@ -78,7 +81,7 @@ export function SiteFooter() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-0 md:col-span-7 md:grid-cols-4 md:gap-8">
+          <div className="grid grid-cols-1 gap-0 lg:col-span-7 lg:grid-cols-4 lg:gap-[32px]">
             <FooterColumn title={t('products')}>
               <FooterLink href="https://www.hitbot.cc/terminal-gripper/">
                 {t('robotHand')}
@@ -122,27 +125,27 @@ export function SiteFooter() {
         </div>
 
         {/* 底部：版权 + 法律链接 */}
-        <div className="border-divider text-text-muted flex min-h-[50px] flex-col gap-2 border-t pb-16 text-sm md:flex-row md:items-center md:justify-between md:pb-0 md:text-lg">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="border-divider text-text-muted flex min-h-[50px] flex-col gap-[8px] border-t pb-[64px] text-sm lg:flex-row lg:items-center lg:justify-between lg:pb-0 lg:text-lg">
+          <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px]">
             <span>{t('copyright')}</span>
             <span className="text-text-disabled">|</span>
             <a
               href="https://beian.miit.gov.cn/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-text-muted hover:text-brand-500"
+              className="text-text-muted inline-flex min-h-[36px] items-center hover:text-brand-500"
             >
               {t('icp')}
             </a>
             <span className="text-text-disabled">|</span>
             <span>{t('byline')}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[4px]">
             <a
               href="https://hitbot.cc/policy.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-text-muted hover:text-brand-500"
+              className="text-text-muted inline-flex min-h-[36px] items-center hover:text-brand-500"
             >
               {t('privacyPolicy')}
             </a>
@@ -150,7 +153,7 @@ export function SiteFooter() {
               href="https://hitbot.cc/disclaimer.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-text-muted hover:text-brand-500"
+              className="text-text-muted inline-flex min-h-[36px] items-center hover:text-brand-500"
             >
               {t('disclaimer')}
             </a>
@@ -158,7 +161,7 @@ export function SiteFooter() {
               href="https://hitbot.cc/sitemap.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-text-muted hover:text-brand-500"
+              className="text-text-muted inline-flex min-h-[36px] items-center hover:text-brand-500"
             >
               {t('siteMap')}
             </a>
@@ -179,16 +182,18 @@ function ContactRow({
   children: ReactNode;
 }) {
   return (
-    <li className="flex items-start gap-2.5">
+    <li className="grid grid-cols-[16px_auto_minmax(0,1fr)] items-start gap-x-[8px] gap-y-[2px]">
       <Image
         src={icon}
         alt=""
         width={16}
         height={16}
-        className="text-text-muted mt-0.5 size-4 shrink-0 object-fill"
+        className="text-text-muted mt-[2px] size-4 shrink-0 object-fill"
       />
       <span className="text-text-strong shrink-0">{label}</span>
-      <span className="text-text-muted leading-[24px]">{children}</span>
+      <span className="text-text-muted min-w-0 break-words leading-[22px] lg:leading-[24px]">
+        {children}
+      </span>
     </li>
   );
 }
@@ -197,23 +202,23 @@ function FooterColumn({ title, children }: { title: string; children: ReactNode 
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="border-divider border-b py-1 md:border-b-0 md:py-0">
+    <div className="border-divider border-b py-[4px] lg:border-b-0 lg:py-0">
       <button
         type="button"
-        className="text-text-strong flex min-h-11 w-full items-center justify-between text-sm font-normal md:hidden"
+        className="text-text-strong flex min-h-[44px] w-full items-center justify-between text-sm font-normal lg:hidden"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
       >
         <span>{title}</span>
         <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />
       </button>
-      <h3 className="text-text-strong mb-3 hidden text-lg font-normal whitespace-nowrap md:block">
+      <h3 className="text-text-strong mb-[12px] hidden text-lg font-normal whitespace-nowrap lg:block">
         {title}
       </h3>
       <ul
         className={cn(
-          'text-text-muted space-y-2.5 overflow-hidden text-sm leading-6 transition-[max-height,opacity] duration-200 md:block md:max-h-none md:text-lg md:leading-[29px] md:opacity-100',
-          open ? 'max-h-64 pb-4 opacity-100' : 'max-h-0 opacity-0 md:pb-0',
+          'text-text-muted flex flex-col gap-[10px] overflow-hidden text-sm leading-6 transition-[max-height,opacity] duration-200 lg:max-h-none lg:text-lg lg:leading-[29px] lg:opacity-100',
+          open ? 'max-h-[256px] pb-[16px] opacity-100' : 'max-h-0 opacity-0 lg:pb-0',
         )}
       >
         {children}
@@ -247,7 +252,7 @@ function FooterLink({
           href={href}
           target={newTab ? '_blank' : undefined}
           rel={newTab ? 'noopener noreferrer' : undefined}
-          className="text-text-muted hover:text-brand-500"
+          className="text-text-muted inline-flex min-h-[36px] min-w-[36px] items-center hover:text-brand-500"
         >
           {children}
         </a>
@@ -256,7 +261,10 @@ function FooterLink({
   }
   return (
     <li>
-      <a href={href} className="text-text-muted hover:text-brand-500">
+      <a
+        href={href}
+        className="text-text-muted inline-flex min-h-[36px] min-w-[36px] items-center hover:text-brand-500"
+      >
         {children}
       </a>
     </li>

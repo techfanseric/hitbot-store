@@ -1,8 +1,10 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { ChevronDown } from 'lucide-react';
 import { categories } from '@/mock-data';
 import { products } from '@/mock-data/products';
 import { cn } from '@/lib/utils';
@@ -31,10 +33,13 @@ export function CategoryFilter() {
   const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const validIds = new Set<ProductCategory>(categories.map((c) => c.id));
   const raw = searchParams.get('category');
   const active = raw && validIds.has(raw as ProductCategory) ? (raw as ProductCategory) : null;
   const hasActiveFilters = searchParams.toString().length > 0;
+  const hasSecondaryFilters = secondaryFilterKeys.some((key) => searchParams.has(key));
+  const showLinkedFilters = Boolean(active) || hasSecondaryFilters;
   const productsInScope = active
     ? catalogProducts.filter((product) => product.category === active)
     : catalogProducts;
@@ -73,23 +78,25 @@ export function CategoryFilter() {
   }
 
   return (
-    <aside className="bg-transparent">
-      <div className="mb-5 flex items-center justify-between gap-3">
+    <aside className="self-start bg-transparent">
+      <div className="mb-[12px] flex items-center justify-between gap-[12px]">
         <h3 className="text-text-strong text-lg font-semibold">{t('selectionTitle')}</h3>
         {hasActiveFilters && (
           <button
             type="button"
             onClick={clearFilters}
-            className="text-text-muted hover:text-brand-500 text-sm"
+            className="text-text-muted hover:text-brand-500 inline-flex min-h-[36px] min-w-[36px] items-center justify-end text-sm"
           >
             {t('clearFilters')}
           </button>
         )}
       </div>
 
-      <div className="mb-6">
-        <p className="text-text-muted mb-3 text-sm font-medium">{t('majorCategory')}</p>
-        <div className="grid gap-2">
+      <div className="mb-[12px] lg:mb-[16px]">
+        <p className="text-text-muted mb-[8px] text-sm font-medium lg:mb-[12px]">
+          {t('majorCategory')}
+        </p>
+        <div className="flex gap-[8px] overflow-x-auto pb-[4px] lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
           <CategoryButton active={!active} count={catalogProducts.length} onClick={clearFilters}>
             {t('allCategories')}
           </CategoryButton>
@@ -106,125 +113,154 @@ export function CategoryFilter() {
         </div>
       </div>
 
-      <div className="border-divider border-t pt-5">
-        <div className="mb-4">
+      <div className="border-divider border-t pt-[12px] lg:pt-[20px]">
+        <button
+          type="button"
+          className="flex min-h-[40px] w-full items-center justify-between gap-[12px] text-left lg:hidden"
+          onClick={() => setAdvancedOpen((value) => !value)}
+          aria-expanded={advancedOpen}
+        >
+          <span>
+            <span className="text-text-strong block text-sm font-semibold">
+              {t('linkedFilters')}
+            </span>
+            <span className="text-text-muted mt-[2px] block text-sm leading-snug">
+              {active ? t('linkedFiltersHint') : t('chooseCategoryHint')}
+            </span>
+          </span>
+          <ChevronDown
+            className={cn('size-4 shrink-0 transition-transform', advancedOpen && 'rotate-180')}
+          />
+        </button>
+        <div className={cn('hidden lg:block', showLinkedFilters && 'mb-[12px]')}>
           <p className="text-text-strong text-sm font-semibold">{t('linkedFilters')}</p>
-          <p className="text-text-muted mt-1 text-sm leading-relaxed">
+          <p className="text-text-muted mt-[4px] text-sm leading-relaxed">
             {active ? t('linkedFiltersHint') : t('chooseCategoryHint')}
           </p>
         </div>
 
-        {availableKeys.has('partClass') && (
-          <FilterGroup title={t('partClass')}>
-            {partClassOptions
-              .filter((option) => hasOption(productsInScope, 'partClass', option))
-              .map((option) => (
-                <FilterButton
-                  key={option}
-                  active={searchParams.get('partClass') === option}
-                  onClick={() => toggleParam('partClass', option)}
-                >
-                  {t(`partClassOption.${option}`)}
-                </FilterButton>
-              ))}
-          </FilterGroup>
-        )}
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows,opacity] duration-200',
+            advancedOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+            showLinkedFilters && 'lg:block lg:opacity-100',
+            !showLinkedFilters && 'lg:hidden',
+          )}
+        >
+          <div className="overflow-hidden lg:overflow-visible">
+            {availableKeys.has('partClass') && (
+              <FilterGroup title={t('partClass')}>
+                {partClassOptions
+                  .filter((option) => hasOption(productsInScope, 'partClass', option))
+                  .map((option) => (
+                    <FilterButton
+                      key={option}
+                      active={searchParams.get('partClass') === option}
+                      onClick={() => toggleParam('partClass', option)}
+                    >
+                      {t(`partClassOption.${option}`)}
+                    </FilterButton>
+                  ))}
+              </FilterGroup>
+            )}
 
-        {availableKeys.has('stock') && (
-          <FilterGroup title={t('stock')}>
-            {stockOptions
-              .filter((option) => hasOption(productsInScope, 'stock', option))
-              .map((option) => (
-                <FilterButton
-                  key={option}
-                  active={searchParams.get('stock') === option}
-                  onClick={() => toggleParam('stock', option)}
-                >
-                  {t(`stockOption.${option}`)}
-                </FilterButton>
-              ))}
-          </FilterGroup>
-        )}
+            {availableKeys.has('stock') && (
+              <FilterGroup title={t('stock')}>
+                {stockOptions
+                  .filter((option) => hasOption(productsInScope, 'stock', option))
+                  .map((option) => (
+                    <FilterButton
+                      key={option}
+                      active={searchParams.get('stock') === option}
+                      onClick={() => toggleParam('stock', option)}
+                    >
+                      {t(`stockOption.${option}`)}
+                    </FilterButton>
+                  ))}
+              </FilterGroup>
+            )}
 
-        {availableKeys.has('payload') && (
-          <FilterGroup title={t('payload')}>
-            {payloadOptions
-              .filter((option) => hasSelectionThreshold(productsInScope, 'payloadKg', option))
-              .map((option) => (
-                <FilterButton
-                  key={option}
-                  active={searchParams.get('payload') === option}
-                  onClick={() => toggleParam('payload', option)}
-                >
-                  {t('payloadAtLeast', { value: option })}
-                </FilterButton>
-              ))}
-          </FilterGroup>
-        )}
+            {availableKeys.has('payload') && (
+              <FilterGroup title={t('payload')}>
+                {payloadOptions
+                  .filter((option) => hasSelectionThreshold(productsInScope, 'payloadKg', option))
+                  .map((option) => (
+                    <FilterButton
+                      key={option}
+                      active={searchParams.get('payload') === option}
+                      onClick={() => toggleParam('payload', option)}
+                    >
+                      {t('payloadAtLeast', { value: option })}
+                    </FilterButton>
+                  ))}
+              </FilterGroup>
+            )}
 
-        {availableKeys.has('reach') && (
-          <FilterGroup title={t('reach')}>
-            {reachOptions
-              .filter((option) => hasSelectionThreshold(productsInScope, 'reachMm', option))
-              .map((option) => (
-                <FilterButton
-                  key={option}
-                  active={searchParams.get('reach') === option}
-                  onClick={() => toggleParam('reach', option)}
-                >
-                  {t('reachAtLeast', { value: option })}
-                </FilterButton>
-              ))}
-          </FilterGroup>
-        )}
+            {availableKeys.has('reach') && (
+              <FilterGroup title={t('reach')}>
+                {reachOptions
+                  .filter((option) => hasSelectionThreshold(productsInScope, 'reachMm', option))
+                  .map((option) => (
+                    <FilterButton
+                      key={option}
+                      active={searchParams.get('reach') === option}
+                      onClick={() => toggleParam('reach', option)}
+                    >
+                      {t('reachAtLeast', { value: option })}
+                    </FilterButton>
+                  ))}
+              </FilterGroup>
+            )}
 
-        {availableKeys.has('stroke') && (
-          <FilterGroup title={t('stroke')}>
-            {strokeOptions
-              .filter((option) => hasSelectionThreshold(productsInScope, 'strokeMm', option))
-              .map((option) => (
-                <FilterButton
-                  key={option}
-                  active={searchParams.get('stroke') === option}
-                  onClick={() => toggleParam('stroke', option)}
-                >
-                  {t('strokeAtLeast', { value: option })}
-                </FilterButton>
-              ))}
-          </FilterGroup>
-        )}
+            {availableKeys.has('stroke') && (
+              <FilterGroup title={t('stroke')}>
+                {strokeOptions
+                  .filter((option) => hasSelectionThreshold(productsInScope, 'strokeMm', option))
+                  .map((option) => (
+                    <FilterButton
+                      key={option}
+                      active={searchParams.get('stroke') === option}
+                      onClick={() => toggleParam('stroke', option)}
+                    >
+                      {t('strokeAtLeast', { value: option })}
+                    </FilterButton>
+                  ))}
+              </FilterGroup>
+            )}
 
-        {availableKeys.has('gripForce') && (
-          <FilterGroup title={t('gripForce')}>
-            {gripForceOptions
-              .filter((option) => hasSelectionThreshold(productsInScope, 'gripForceN', option))
-              .map((option) => (
-                <FilterButton
-                  key={option}
-                  active={searchParams.get('gripForce') === option}
-                  onClick={() => toggleParam('gripForce', option)}
-                >
-                  {t('gripForceAtLeast', { value: option })}
-                </FilterButton>
-              ))}
-          </FilterGroup>
-        )}
+            {availableKeys.has('gripForce') && (
+              <FilterGroup title={t('gripForce')}>
+                {gripForceOptions
+                  .filter((option) => hasSelectionThreshold(productsInScope, 'gripForceN', option))
+                  .map((option) => (
+                    <FilterButton
+                      key={option}
+                      active={searchParams.get('gripForce') === option}
+                      onClick={() => toggleParam('gripForce', option)}
+                    >
+                      {t('gripForceAtLeast', { value: option })}
+                    </FilterButton>
+                  ))}
+              </FilterGroup>
+            )}
 
-        {availableKeys.has('dof') && (
-          <FilterGroup title={t('dof')}>
-            {dofOptions
-              .filter((option) => hasSelectionValue(productsInScope, 'dof', option))
-              .map((option) => (
-                <FilterButton
-                  key={option}
-                  active={searchParams.get('dof') === option}
-                  onClick={() => toggleParam('dof', option)}
-                >
-                  {t('dofValue', { value: option })}
-                </FilterButton>
-              ))}
-          </FilterGroup>
-        )}
+            {availableKeys.has('dof') && (
+              <FilterGroup title={t('dof')}>
+                {dofOptions
+                  .filter((option) => hasSelectionValue(productsInScope, 'dof', option))
+                  .map((option) => (
+                    <FilterButton
+                      key={option}
+                      active={searchParams.get('dof') === option}
+                      onClick={() => toggleParam('dof', option)}
+                    >
+                      {t('dofValue', { value: option })}
+                    </FilterButton>
+                  ))}
+              </FilterGroup>
+            )}
+          </div>
+        </div>
       </div>
     </aside>
   );
@@ -307,7 +343,7 @@ function CategoryButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'hover:bg-bg-control flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-3 text-left text-lg transition-colors',
+        'hover:bg-bg-control flex min-h-[36px] shrink-0 items-center justify-between gap-[8px] rounded-md px-[12px] text-left text-sm transition-colors lg:w-full lg:px-[10px]',
         active ? 'bg-text-strong text-bg-elevated font-semibold' : 'text-text bg-bg-surface',
       )}
     >
@@ -326,9 +362,9 @@ function CategoryButton({
 
 function FilterGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="border-divider mb-5 border-b pb-5 last:mb-0 last:border-b-0 last:pb-0">
-      <p className="text-text-muted mb-3 text-sm font-medium">{title}</p>
-      <div className="flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
+    <div className="border-divider mb-[12px] border-b pb-[12px] first:mt-[12px] last:mb-0 last:border-b-0 last:pb-0 lg:grid lg:grid-cols-[64px_minmax(0,1fr)] lg:gap-x-2 lg:first:mt-0">
+      <p className="text-text-muted mb-[8px] text-sm font-medium lg:mb-0 lg:pt-2">{title}</p>
+      <div className="flex gap-[8px] overflow-x-auto pb-[4px] lg:flex-wrap lg:overflow-visible lg:pb-0">
         {children}
       </div>
     </div>
@@ -350,7 +386,7 @@ function FilterButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'hover:bg-bg-control rounded-pill min-h-9 shrink-0 px-3 text-left text-sm transition-colors',
+        'hover:bg-bg-control rounded-pill inline-flex min-h-[36px] shrink-0 items-center px-[12px] text-left text-sm transition-colors',
         active ? 'bg-brand-soft text-brand-500 font-semibold' : 'text-text',
       )}
     >

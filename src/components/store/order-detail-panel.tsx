@@ -3,12 +3,13 @@
 import { useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { ArrowLeft, ClipboardCheck, LogIn } from 'lucide-react';
+import { ArrowLeft, LogIn } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
 import { DEFAULT_ENTERPRISE_ID, useProcurementStore } from '@/lib/procurement-store';
 import { formatPrice } from '@/lib/format';
-import { OrderRow } from './account-panel';
+import { OrderRow, statusVariant } from './account-panel';
 import type { EnterpriseProfile, LocalOrderSnapshot } from '@/types/procurement';
 
 interface OrderDetailPanelProps {
@@ -38,6 +39,7 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
   const t = useTranslations('Orders');
   const tAccount = useTranslations('Account');
   const locale = useLocale();
+  const authHydrated = useProcurementHydrated();
   const { isAuthenticated, profile, orders, approveLocalOrder, markLocalOrderPaid } =
     useProcurementStore();
   const decodedOrderNo = decodeURIComponent(orderNo);
@@ -53,20 +55,28 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
     [decodedOrderNo, isAuthenticated, orders, profile.enterpriseId],
   );
 
+  if (!authHydrated) {
+    return <section className="bg-bg-elevated min-h-[180px] rounded-lg p-4 md:p-5" />;
+  }
+
   if (!isAuthenticated) {
     return (
-      <section className="bg-bg-elevated rounded-lg p-6">
-        <div className="flex max-w-2xl flex-col gap-5">
-          <Badge variant="secondary">{t('signedOutBadge')}</Badge>
-          <div>
-            <h2 className="text-text-strong text-2xl font-semibold">{t('authTitle')}</h2>
-            <p className="text-text-muted mt-3 text-lg leading-relaxed">{t('authHint')}</p>
+      <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <Badge variant="secondary">{t('signedOutBadge')}</Badge>
+            <h2 className="text-text-strong mt-3 text-xl font-semibold md:text-2xl">
+              {t('authTitle')}
+            </h2>
+            <p className="text-text-muted mt-2 max-w-2xl text-sm leading-relaxed md:text-base">
+              {t('authHint')}
+            </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row lg:shrink-0">
             <Button variant="primary" asChild>
               <Link
-                href={`/store/login?next=${encodeURIComponent(
-                  `/store/orders/${encodeURIComponent(decodedOrderNo)}`,
+                href={`/${locale}/login?next=${encodeURIComponent(
+                  `/${locale}/orders/${encodeURIComponent(decodedOrderNo)}`,
                 )}`}
               >
                 <LogIn className="size-4" />
@@ -74,7 +84,7 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
               </Link>
             </Button>
             <Button variant="secondary" asChild>
-              <Link href="/store/orders">
+              <Link href={`/${locale}/orders`}>
                 <ArrowLeft className="size-4" />
                 <span>{t('backToOrders')}</span>
               </Link>
@@ -87,17 +97,19 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
 
   if (!order) {
     return (
-      <section className="bg-bg-elevated rounded-lg p-6">
-        <div className="flex max-w-2xl flex-col gap-5">
-          <Badge variant="secondary">{decodedOrderNo}</Badge>
-          <div>
-            <h2 className="text-text-strong text-2xl font-semibold">{t('notFoundTitle')}</h2>
-            <p className="text-text-muted mt-3 text-lg leading-relaxed">
+      <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <Badge variant="secondary">{decodedOrderNo}</Badge>
+            <h2 className="text-text-strong mt-3 text-xl font-semibold md:text-2xl">
+              {t('notFoundTitle')}
+            </h2>
+            <p className="text-text-muted mt-2 max-w-2xl text-sm leading-relaxed md:text-base">
               {t('notFoundHint', { orderNo: decodedOrderNo })}
             </p>
           </div>
-          <Button variant="secondary" asChild>
-            <Link href="/store/orders">
+          <Button variant="secondary" className="w-full sm:w-auto lg:shrink-0" asChild>
+            <Link href={`/${locale}/orders`}>
               <ArrowLeft className="size-4" />
               <span>{t('backToOrders')}</span>
             </Link>
@@ -108,32 +120,35 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="bg-bg-elevated rounded-lg p-5">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-3 md:space-y-5">
+      <section className="bg-bg-elevated rounded-lg p-3 md:p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <Button variant="secondary" size="sm" asChild>
-              <Link href="/store/orders">
-                <ArrowLeft className="size-4" />
-                <span>{t('backToOrders')}</span>
-              </Link>
-            </Button>
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              <ClipboardCheck className="text-brand-500 size-5" />
-              <Badge variant="standard">{tAccount(`orderStatus.${order.status}`)}</Badge>
+            <div className="mb-3">
+              <Button variant="secondary" size="sm" className="h-[36px] px-3" asChild>
+                <Link href={`/${locale}/orders`}>
+                  <ArrowLeft className="size-4" />
+                  <span>{t('backToOrders')}</span>
+                </Link>
+              </Button>
             </div>
-            <h2 className="text-text-strong mt-3 text-2xl font-semibold break-all">
-              {order.orderNo}
-            </h2>
-            <p className="text-text mt-2 text-lg">{order.projectName}</p>
-            <p className="text-text-muted mt-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-text-strong text-lg font-semibold break-all md:text-2xl">
+                {order.orderNo}
+              </h2>
+              <Badge variant={statusVariant(order.status)}>
+                {tAccount(`orderStatus.${order.status}`)}
+              </Badge>
+            </div>
+            <p className="text-text mt-1.5 text-base md:mt-2 md:text-lg">{order.projectName}</p>
+            <p className="text-text-muted mt-1.5 text-sm md:mt-2">
               {t('detailOwner', {
                 company: order.companyName ?? profile.companyName,
                 name: order.submittedBy ?? tAccount(order.role),
               })}
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[420px]">
+          <div className="grid grid-cols-3 gap-2 lg:min-w-[420px] lg:gap-3">
             <OrderDetailMetric label={tAccount('items')} value={String(order.itemCount)} />
             <OrderDetailMetric
               label={t('totalAmount')}
@@ -150,7 +165,6 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
       <OrderRow
         order={order}
         locale={locale}
-        roleLabel={tAccount(order.role)}
         statusLabel={tAccount(`orderStatus.${order.status}`)}
         submittedAtLabel={formatDate(order.submittedAt, locale)}
         canApprove={isAuthenticated && canApproveOrder(profile, order)}
@@ -162,6 +176,7 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
         onPay={() => markLocalOrderPaid(order.orderNo)}
         onAdvance={() => undefined}
         showDetails
+        detailOnly
         labels={{
           items: tAccount('items'),
           approval: order.approvalMode
@@ -253,9 +268,11 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
 
 function OrderDetailMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-bg-surface rounded-lg p-4">
-      <p className="text-text-muted text-sm">{label}</p>
-      <p className="text-text-strong mt-2 text-lg font-semibold tabular-nums">{value}</p>
+    <div className="bg-bg-surface rounded-md p-2.5 md:rounded-lg md:p-4">
+      <p className="text-text-muted truncate text-xs md:text-sm">{label}</p>
+      <p className="text-text-strong mt-1 truncate text-sm font-semibold tabular-nums md:mt-2 md:text-lg">
+        {value}
+      </p>
     </div>
   );
 }

@@ -46,6 +46,15 @@ export interface AdminMember {
   updatedAt: string;
 }
 
+export interface AdminApprovalSettings {
+  enterpriseId: string;
+  defaultApproverMemberId: string;
+  requireBuyerOrderApproval: boolean;
+  requireQuoteOrderApproval: boolean;
+  amountThresholdCents: number | null;
+  updatedAt: string;
+}
+
 export interface AdminEnterpriseAccessRequest {
   id: string;
   companyName: string;

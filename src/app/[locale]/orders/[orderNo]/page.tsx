@@ -25,13 +25,13 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 
   return (
     <div className="bg-bg-app">
-      <div className="mx-auto w-[90%] max-w-[1280px] py-8 md:py-10">
-        <div className="mb-6 max-w-3xl">
+      <div className="mx-auto w-[90%] max-w-[1280px] py-[20px] md:py-[32px]">
+        <div className="mb-[20px] max-w-3xl">
           <p className="text-text-muted text-sm font-medium">HITBOT Store</p>
-          <h1 className="text-text-strong mt-2 text-3xl font-semibold md:text-4xl">
+          <h1 className="text-text-strong mt-1.5 text-2xl font-semibold md:mt-2 md:text-4xl">
             {t('detailTitle')}
           </h1>
-          <p className="text-text-muted mt-2 max-w-2xl text-base leading-relaxed">
+          <p className="text-text-muted mt-1.5 hidden max-w-2xl text-sm leading-relaxed sm:block md:mt-2 md:text-base">
             {t('detailSubtitle')}
           </p>
         </div>

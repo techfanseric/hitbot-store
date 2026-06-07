@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Children, useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import Link from 'next/link';
 import {
   Building2,
+  ChevronDown,
   CircleDollarSign,
   ClipboardCheck,
   Clock3,
@@ -32,12 +33,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useAdminStore } from '@/lib/admin-store';
+import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
+import { approvalSettingsForEnterprise, useAdminStore } from '@/lib/admin-store';
 import { formatPrice } from '@/lib/format';
-import { matchesOrderTimeFilter, type OrderTimeFilter } from '@/lib/order-filters';
+import {
+  matchesOrderTimeFilter,
+  type OrderDateRange,
+  type OrderTimeFilter,
+} from '@/lib/order-filters';
 import { DEFAULT_ENTERPRISE_ID, useProcurementStore } from '@/lib/procurement-store';
+import { cn } from '@/lib/utils';
 import { PartClassBadge } from './part-class-badge';
-import type { AdminMember, AdminPermission } from '@/types/admin';
+import { OrderTimeFilterControl } from './order-time-filter-control';
+import type { AdminApprovalSettings, AdminMember, AdminPermission } from '@/types/admin';
 import type {
   CheckoutDraft,
   InvoiceProfile,
@@ -48,7 +56,7 @@ import type {
 import type { EnterpriseProfile, OrderStatus } from '@/types/procurement';
 
 type OrderStatusFilter = 'all' | OrderStatus;
-type AccountTab = 'overview' | 'orders' | 'invoices' | 'settings';
+type AccountTab = 'overview' | 'orders' | 'invoices' | 'members' | 'approval';
 const ACCOUNT_ORDER_PAGE_SIZE = 8;
 type MemberFormState = {
   name: string;
@@ -78,11 +86,14 @@ function canApproveOrder(profile: EnterpriseProfile, order: LocalOrderSnapshot) 
 export function AccountPanel() {
   const t = useTranslations('Account');
   const locale = useLocale();
+  const authHydrated = useProcurementHydrated();
   const [activeTab, setActiveTab] = useState<AccountTab>('overview');
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState<OrderTimeFilter>('all');
+  const [customTimeRange, setCustomTimeRange] = useState<OrderDateRange>({});
   const [visibleOrderCount, setVisibleOrderCount] = useState(ACCOUNT_ORDER_PAGE_SIZE);
+  const [orderFiltersOpen, setOrderFiltersOpen] = useState(false);
   const [accessForm, setAccessForm] = useState({
     companyName: '',
     contactName: '',
@@ -98,14 +109,15 @@ export function AccountPanel() {
     permissions: [],
   });
   const members = useAdminStore((state) => state.members);
+  const approvalSettings = useAdminStore((state) => state.approvalSettings);
   const enterpriseAccessRequests = useAdminStore((state) => state.enterpriseAccessRequests);
   const submitEnterpriseAccessRequest = useAdminStore(
     (state) => state.submitEnterpriseAccessRequest,
   );
   const inviteMember = useAdminStore((state) => state.inviteMember);
   const activateMember = useAdminStore((state) => state.activateMember);
-  const updateMemberRoleName = useAdminStore((state) => state.updateMemberRoleName);
   const toggleMemberPermission = useAdminStore((state) => state.toggleMemberPermission);
+  const updateApprovalSettings = useAdminStore((state) => state.updateApprovalSettings);
   const {
     isAuthenticated,
     profile,
@@ -193,10 +205,15 @@ export function AccountPanel() {
       enterpriseOrders.filter((order) => {
         const statusMatch = statusFilter === 'all' || order.status === statusFilter;
         const projectMatch = projectFilter === 'all' || order.projectName === projectFilter;
-        const timeMatch = matchesOrderTimeFilter(order.submittedAt, timeFilter);
+        const timeMatch = matchesOrderTimeFilter(
+          order.submittedAt,
+          timeFilter,
+          new Date(),
+          customTimeRange,
+        );
         return statusMatch && projectMatch && timeMatch;
       }),
-    [enterpriseOrders, projectFilter, statusFilter, timeFilter],
+    [customTimeRange, enterpriseOrders, projectFilter, statusFilter, timeFilter],
   );
   const visibleOrders = filteredOrders.slice(0, visibleOrderCount);
   const hasMoreOrders = visibleOrderCount < filteredOrders.length;
@@ -242,7 +259,12 @@ export function AccountPanel() {
           },
         ]
       : []),
-    ...(isEnterpriseAdmin ? [{ key: 'settings' as const, label: t('tabSettings') }] : []),
+    ...(isEnterpriseAdmin
+      ? [
+          { key: 'members' as const, label: t('tabMembers') },
+          { key: 'approval' as const, label: t('tabApproval') },
+        ]
+      : []),
   ];
   const enterpriseMembers = useMemo(
     () =>
@@ -250,6 +272,10 @@ export function AccountPanel() {
         (member) => (member.enterpriseId ?? DEFAULT_ENTERPRISE_ID) === profile.enterpriseId,
       ),
     [members, profile.enterpriseId],
+  );
+  const enterpriseApprovalSettings = useMemo(
+    () => approvalSettingsForEnterprise(approvalSettings, enterpriseMembers, profile.enterpriseId),
+    [approvalSettings, enterpriseMembers, profile.enterpriseId],
   );
   const accessLookupEmail = accessForm.email.trim().toLowerCase();
   const latestAccessRequest = useMemo(
@@ -316,7 +342,7 @@ export function AccountPanel() {
 
   useEffect(() => {
     if (
-      (activeTab === 'settings' && !isEnterpriseAdmin) ||
+      ((activeTab === 'members' || activeTab === 'approval') && !isEnterpriseAdmin) ||
       (activeTab === 'invoices' && !canManageInvoices)
     ) {
       setActiveTab('overview');
@@ -325,12 +351,16 @@ export function AccountPanel() {
 
   useEffect(() => {
     setVisibleOrderCount(ACCOUNT_ORDER_PAGE_SIZE);
-  }, [projectFilter, statusFilter, timeFilter]);
+  }, [customTimeRange, projectFilter, statusFilter, timeFilter]);
 
   return (
     <div className="grid min-w-0 gap-4">
-      {!isAuthenticated && (
-        <section className="bg-bg-elevated rounded-lg p-5">
+      {!authHydrated && (
+        <section className="bg-bg-elevated min-h-[180px] rounded-lg p-4 md:p-5" />
+      )}
+
+      {authHydrated && !isAuthenticated && (
+        <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-3">
               <Building2 className="text-brand-500 mt-1 size-5 shrink-0" />
@@ -338,7 +368,7 @@ export function AccountPanel() {
                 <h2 className="text-text-strong text-xl font-semibold">
                   {t('accessRequestTitle')}
                 </h2>
-                <p className="text-text-muted mt-2 text-lg leading-relaxed">
+                <p className="text-text-muted mt-1.5 text-sm leading-relaxed md:text-base">
                   {t('accessRequestHint')}
                 </p>
               </div>
@@ -350,8 +380,8 @@ export function AccountPanel() {
             )}
           </div>
 
-          <form className="mt-5 grid gap-4" onSubmit={handleAccessRequestSubmit}>
-            <div className="grid gap-4 md:grid-cols-2">
+          <form className="mt-4 grid gap-3 md:gap-4" onSubmit={handleAccessRequestSubmit}>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field label={t('companyName')}>
                 <Input
                   value={accessForm.companyName}
@@ -401,38 +431,42 @@ export function AccountPanel() {
                 />
               </Field>
             </div>
-            <Field label={t('accessIntent')}>
-              <textarea
-                value={accessForm.intent}
-                placeholder={t('accessIntentPlaceholder')}
-                onChange={(event) =>
-                  setAccessForm((current) => ({
-                    ...current,
-                    intent: event.target.value,
-                  }))
-                }
-                className="border-divider bg-bg-control text-text-strong placeholder:text-text-muted focus:border-brand-500 min-h-24 w-full rounded-md border px-3 py-2 text-sm transition outline-none disabled:cursor-not-allowed disabled:opacity-60"
-              />
-            </Field>
+            <div className="grid gap-3">
+              <Field label={t('accessIntent')}>
+                <textarea
+                  value={accessForm.intent}
+                  placeholder={t('accessIntentPlaceholder')}
+                  onChange={(event) =>
+                    setAccessForm((current) => ({
+                      ...current,
+                      intent: event.target.value,
+                    }))
+                  }
+                  className="border-divider bg-bg-control text-text-strong placeholder:text-text-muted focus:border-brand-500 min-h-[88px] w-full resize-y rounded-md border px-3 py-2 text-sm transition outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </Field>
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full sm:w-auto"
+                  disabled={!canSubmitAccessRequest}
+                >
+                  <Send className="size-4" />
+                  <span>{t('submitAccessRequest')}</span>
+                </Button>
+              </div>
+            </div>
             {latestAccessRequest?.status === 'approved' && latestAccessRequest.enterpriseId && (
               <p className="text-state-green-strong text-sm">
                 {t('accessApprovedHint', { enterpriseId: latestAccessRequest.enterpriseId })}
               </p>
             )}
-            <Button
-              type="submit"
-              variant="primary"
-              className="w-full sm:w-fit"
-              disabled={!canSubmitAccessRequest}
-            >
-              <Send className="size-4" />
-              <span>{t('submitAccessRequest')}</span>
-            </Button>
           </form>
         </section>
       )}
 
-      {isAuthenticated && (
+      {authHydrated && isAuthenticated && (
         <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
           <aside className="bg-bg-elevated rounded-lg p-2 lg:sticky lg:top-[124px]">
             <div className="border-divider mb-2 border-b px-2 py-3">
@@ -448,9 +482,9 @@ export function AccountPanel() {
                   onClick={signOut}
                   aria-label={t('signOut')}
                   title={t('signOut')}
-                  className="text-text-muted hover:bg-bg-control-hover hover:text-brand-500 inline-flex size-[28px] shrink-0 items-center justify-center rounded-sm transition-colors"
+                  className="text-text-muted hover:bg-bg-control-hover hover:text-brand-500 inline-flex size-[40px] shrink-0 items-center justify-center rounded-sm transition-colors"
                 >
-                  <LogOut className="size-3.5" />
+                  <LogOut className="size-4" />
                 </button>
               </div>
             </div>
@@ -516,17 +550,25 @@ export function AccountPanel() {
               </section>
             )}
 
-            {isEnterpriseAdmin && activeTab === 'settings' && (
-              <EnterpriseSettingsPanel
+            {isEnterpriseAdmin && activeTab === 'members' && (
+              <MemberManagementPanel
                 profile={profile}
                 members={enterpriseMembers}
                 memberForm={memberForm}
                 setMemberForm={setMemberForm}
                 updateProfile={updateProfile}
-                updateMemberRoleName={updateMemberRoleName}
                 toggleMemberPermission={toggleMemberPermission}
                 activateMember={activateMember}
                 onSubmit={handleMemberSubmit}
+              />
+            )}
+
+            {isEnterpriseAdmin && activeTab === 'approval' && (
+              <ApprovalSettingsPanel
+                profile={profile}
+                members={enterpriseMembers}
+                settings={enterpriseApprovalSettings}
+                updateApprovalSettings={updateApprovalSettings}
               />
             )}
 
@@ -544,29 +586,28 @@ export function AccountPanel() {
             )}
 
             {isAuthenticated && activeTab === 'orders' && (
-              <section className="bg-bg-elevated rounded-lg p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <ClipboardCheck className="text-brand-500 size-5" />
-                      <h2 className="text-text-strong text-xl font-semibold">{t('ordersTitle')}</h2>
+              <section className="bg-bg-elevated rounded-lg p-3 md:p-4">
+                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2.5">
+                      <ClipboardCheck className="text-brand-500 size-4 md:size-5" />
+                      <h2 className="text-text-strong text-base font-semibold md:text-xl">
+                        {t('ordersTitle')}
+                      </h2>
                     </div>
-                    <p className="text-text-muted mt-2 text-lg leading-relaxed">
+                    <p className="text-text-muted mt-1 hidden text-sm leading-relaxed xl:block">
                       {t('ordersHint')}
                     </p>
                   </div>
-                  <Badge variant={isAuthenticated ? 'in-stock' : 'secondary'}>
-                    {isAuthenticated ? t('signedInBadge') : t('signedOut')}
-                  </Badge>
                 </div>
 
                 {enterpriseOrders.length === 0 ? (
-                  <div className="bg-bg-surface mt-5 rounded-lg p-5">
+                  <div className="bg-bg-surface mt-3 rounded-lg p-4">
                     <p className="text-text-strong font-medium">{t('noOrders')}</p>
                     <p className="text-text-muted mt-2 text-sm">{t('noOrdersHint')}</p>
                   </div>
                 ) : (
-                  <div className="mt-5 space-y-4">
+                  <div className="mt-3 space-y-3 md:mt-4">
                     {(enterpriseOsHandoffs.length > 0 || enterpriseQuoteRequests.length > 0) && (
                       <div className="grid gap-4 xl:grid-cols-2">
                         {enterpriseOsHandoffs.length > 0 && (
@@ -575,6 +616,10 @@ export function AccountPanel() {
                             title={t('handoffTitle')}
                             hint={t('handoffHint')}
                             count={t('handoffCount', { count: enterpriseOsHandoffs.length })}
+                            showAllLabel={t('showAllActions', {
+                              count: enterpriseOsHandoffs.length,
+                            })}
+                            collapseLabel={t('collapseActions')}
                           >
                             {enterpriseOsHandoffs.map((handoff) => (
                               <HandoffRow
@@ -611,6 +656,10 @@ export function AccountPanel() {
                             title={t('quotesTitle')}
                             hint={t('quotesHint')}
                             count={t('quoteCount', { count: enterpriseQuoteRequests.length })}
+                            showAllLabel={t('showAllActions', {
+                              count: enterpriseQuoteRequests.length,
+                            })}
+                            collapseLabel={t('collapseActions')}
                           >
                             {enterpriseQuoteRequests.map((request) => (
                               <QuoteRequestRow
@@ -682,77 +731,102 @@ export function AccountPanel() {
                       </div>
                     )}
 
-                    <div className="bg-bg-surface rounded-lg p-3">
-                      <div className="mb-3 flex items-center gap-2">
-                        <ListFilter className="text-brand-500 size-4" />
-                        <p className="text-text-strong font-medium">{t('filterOrders')}</p>
-                      </div>
-                      <div>
-                        <p className="text-text-muted mb-2 text-xs font-medium">
-                          {t('filterStatus')}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {statusFilters.map((filter) => (
-                            <button
-                              key={filter.key}
-                              type="button"
-                              onClick={() => setStatusFilter(filter.key)}
-                              className={`inline-flex h-[32px] items-center rounded-sm px-2.5 text-md transition-colors ${
-                                statusFilter === filter.key
-                                  ? 'bg-bg-elevated text-text-strong font-semibold'
-                                  : 'bg-bg-control text-text-muted hover:text-text'
-                              }`}
-                            >
-                              {filter.label}
-                            </button>
-                          ))}
+                    <div className="bg-bg-surface rounded-lg p-2.5 md:p-3">
+                      <button
+                        type="button"
+                        className="flex min-h-[36px] w-full items-center justify-between gap-2 text-left lg:pointer-events-none"
+                        onClick={() => setOrderFiltersOpen((value) => !value)}
+                        aria-expanded={orderFiltersOpen}
+                      >
+                        <span className="flex items-center gap-2">
+                          <ListFilter className="text-brand-500 size-4" />
+                          <span className="text-text-strong font-medium">{t('filterOrders')}</span>
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            'size-4 shrink-0 transition-transform lg:hidden',
+                            orderFiltersOpen && 'rotate-180',
+                          )}
+                        />
+                      </button>
+                      <div className={cn(orderFiltersOpen ? 'block' : 'hidden lg:block')}>
+                        <div className="overflow-hidden lg:overflow-visible">
+                          <div className="mt-3">
+                            <p className="text-text-muted mb-2 text-xs font-medium">
+                              {t('filterStatus')}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {statusFilters.map((filter) => (
+                                <button
+                                  key={filter.key}
+                                  type="button"
+                                  onClick={() => setStatusFilter(filter.key)}
+                                  className={`inline-flex h-[36px] items-center rounded-sm px-2.5 text-md transition-colors ${
+                                    statusFilter === filter.key
+                                      ? 'bg-bg-elevated text-text-strong font-semibold'
+                                      : 'bg-bg-control text-text-muted hover:text-text'
+                                  }`}
+                                >
+                                  {filter.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <p className="text-text-muted mb-2 text-xs font-medium">
+                              {t('filterProject')}
+                            </p>
+                            <Select value={projectFilter} onValueChange={setProjectFilter}>
+                              <SelectTrigger size="sm" className="w-full text-md">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-72">
+                                {projectOptions.map((project) => (
+                                  <SelectItem key={project} value={project} className="text-md">
+                                    {project === 'all' ? t('allProjects') : project}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="mt-3">
+                            <p className="text-text-muted mb-2 text-xs font-medium">
+                              {t('filterTime')}
+                            </p>
+                            <OrderTimeFilterControl
+                              options={timeFilters}
+                              value={timeFilter}
+                              from={customTimeRange.from ?? ''}
+                              to={customTimeRange.to ?? ''}
+                              labels={{
+                                from: t('timeFrom'),
+                                to: t('timeTo'),
+                              }}
+                              onValueChange={(value) => {
+                                setTimeFilter(value);
+                                setCustomTimeRange({});
+                              }}
+                              onFromChange={(value) => {
+                                const nextRange = { ...customTimeRange, from: value };
+                                setCustomTimeRange(nextRange);
+                                setTimeFilter(nextRange.from || nextRange.to ? 'custom' : 'all');
+                              }}
+                              onToChange={(value) => {
+                                const nextRange = { ...customTimeRange, to: value };
+                                setCustomTimeRange(nextRange);
+                                setTimeFilter(nextRange.from || nextRange.to ? 'custom' : 'all');
+                              }}
+                            />
+                          </div>
+                          <p className="text-text-muted mt-3 text-sm">
+                            {t('filteredOrderCount', { count: filteredOrders.length })}
+                          </p>
                         </div>
                       </div>
-                      <div className="mt-3">
-                        <p className="text-text-muted mb-2 text-xs font-medium">
-                          {t('filterProject')}
-                        </p>
-                        <Select value={projectFilter} onValueChange={setProjectFilter}>
-                          <SelectTrigger size="sm" className="w-full text-md">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-72">
-                            {projectOptions.map((project) => (
-                              <SelectItem key={project} value={project} className="text-md">
-                                {project === 'all' ? t('allProjects') : project}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="mt-3">
-                        <p className="text-text-muted mb-2 text-xs font-medium">
-                          {t('filterTime')}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {timeFilters.map((filter) => (
-                            <button
-                              key={filter.key}
-                              type="button"
-                              onClick={() => setTimeFilter(filter.key)}
-                              className={`inline-flex h-[32px] items-center rounded-sm px-2.5 text-md transition-colors ${
-                                timeFilter === filter.key
-                                  ? 'bg-bg-elevated text-text-strong font-semibold'
-                                  : 'bg-bg-control text-text-muted hover:text-text'
-                              }`}
-                            >
-                              {filter.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-text-muted mt-3 text-sm">
-                        {t('filteredOrderCount', { count: filteredOrders.length })}
-                      </p>
                     </div>
 
                     {filteredOrders.length === 0 ? (
-                      <div className="bg-bg-surface rounded-lg p-5">
+                      <div className="bg-bg-surface rounded-lg p-4">
                         <p className="text-text-strong font-medium">{t('noFilteredOrders')}</p>
                         <p className="text-text-muted mt-2 text-sm">{t('noFilteredOrdersHint')}</p>
                       </div>
@@ -763,7 +837,6 @@ export function AccountPanel() {
                             key={order.orderNo}
                             order={order}
                             locale={locale}
-                            roleLabel={t(order.role)}
                             statusLabel={t(`orderStatus.${order.status}`)}
                             submittedAtLabel={formatDate(order.submittedAt, locale)}
                             canApprove={isAuthenticated && canApproveOrder(profile, order)}
@@ -776,7 +849,7 @@ export function AccountPanel() {
                             onApprove={() => approveLocalOrder(order.orderNo)}
                             onPay={() => markLocalOrderPaid(order.orderNo)}
                             onAdvance={() => undefined}
-                            detailHref={`/store/orders/${encodeURIComponent(order.orderNo)}`}
+                            detailHref={`/${locale}/orders/${encodeURIComponent(order.orderNo)}`}
                             labels={{
                               items: t('items'),
                               approval: order.approvalMode
@@ -896,13 +969,12 @@ export function AccountPanel() {
   );
 }
 
-function EnterpriseSettingsPanel({
+function MemberManagementPanel({
   profile,
   members,
   memberForm,
   setMemberForm,
   updateProfile,
-  updateMemberRoleName,
   toggleMemberPermission,
   activateMember,
   onSubmit,
@@ -912,7 +984,6 @@ function EnterpriseSettingsPanel({
   memberForm: MemberFormState;
   setMemberForm: React.Dispatch<React.SetStateAction<MemberFormState>>;
   updateProfile: (patch: Partial<EnterpriseProfile>) => void;
-  updateMemberRoleName: (memberId: string, roleName: string, actor?: string) => void;
   toggleMemberPermission: (memberId: string, permission: AdminPermission, actor?: string) => void;
   activateMember: (memberId: string, actor?: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
@@ -920,22 +991,24 @@ function EnterpriseSettingsPanel({
   const t = useTranslations('Account');
 
   return (
-    <section className="bg-bg-elevated rounded-lg p-5">
+    <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <UsersRound className="text-brand-500 mt-1 size-5 shrink-0" />
           <div>
             <h2 className="text-text-strong text-xl font-semibold">{t('settingsAdminTitle')}</h2>
-            <p className="text-text-muted mt-2 text-lg leading-relaxed">{t('settingsAdminHint')}</p>
+            <p className="text-text-muted mt-1.5 text-sm leading-relaxed md:text-base">
+              {t('settingsAdminHint')}
+            </p>
           </div>
         </div>
         <Badge variant="in-stock">{t('adminOnly')}</Badge>
       </div>
 
-      <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <form className="bg-bg-surface rounded-lg p-4" onSubmit={onSubmit}>
           <h3 className="text-text-strong font-semibold">{t('createMemberTitle')}</h3>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-4">
             <Field label={t('memberName')}>
               <Input
                 value={memberForm.name}
@@ -1029,32 +1102,23 @@ function EnterpriseSettingsPanel({
             return (
               <article
                 key={member.id}
-                className={`bg-bg-surface min-w-0 rounded-lg p-4 ${
-                  isCurrentMember ? 'ring-brand-500/35 ring-2' : ''
-                }`}
+                className="bg-bg-surface min-w-0 rounded-lg p-4"
               >
-                <div className="grid gap-4 xl:grid-cols-[minmax(180px,1fr)_minmax(220px,1fr)_minmax(220px,1fr)_auto] xl:items-center">
+                <div className="grid gap-4 xl:grid-cols-[minmax(220px,1fr)_minmax(260px,1fr)_auto] xl:items-center">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Icon className="text-brand-500 size-4 shrink-0" />
-                      <p className="text-text-strong truncate font-semibold">{member.name}</p>
-                    </div>
-                    <p className="text-text-muted mt-1 truncate text-sm">{member.email}</p>
+	                    <div className="flex items-center gap-2">
+	                      <Icon className="text-brand-500 size-4 shrink-0" />
+	                      <p className="text-text-strong truncate font-semibold">{member.name}</p>
+	                    </div>
+	                    {member.roleName && (
+	                      <p className="text-text mt-1 truncate text-sm">
+	                        {t('memberRoleName')}: {member.roleName}
+	                      </p>
+	                    )}
+	                    <p className="text-text-muted mt-1 truncate text-sm">{member.email}</p>
                     {member.phone && (
                       <p className="text-text-muted mt-1 truncate text-xs">{member.phone}</p>
                     )}
-                  </div>
-
-                  <div>
-                    <Field label={t('memberRoleName')}>
-                      <Input
-                        value={member.roleName ?? t(member.role)}
-                        disabled={isCurrentMember || isEnterpriseOwner}
-                        onChange={(event) =>
-                          updateMemberRoleName(member.id, event.target.value, profile.contactName)
-                        }
-                      />
-                    </Field>
                   </div>
 
                   <div>
@@ -1076,7 +1140,7 @@ function EnterpriseSettingsPanel({
                       {isCurrentMember
                         ? t('memberActive')
                         : member.status === 'active'
-                          ? (member.roleName ?? t(member.role))
+                          ? t('memberEnabled')
                           : t('memberInvited')}
                     </Badge>
                     {member.status === 'invited' && (
@@ -1097,6 +1161,180 @@ function EnterpriseSettingsPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+function ApprovalSettingsPanel({
+  profile,
+  members,
+  settings,
+  updateApprovalSettings,
+}: {
+  profile: EnterpriseProfile;
+  members: AdminMember[];
+  settings: AdminApprovalSettings;
+  updateApprovalSettings: (
+    enterpriseId: string,
+    patch: Partial<Omit<AdminApprovalSettings, 'enterpriseId' | 'updatedAt'>>,
+    actor?: string,
+  ) => void;
+}) {
+  const t = useTranslations('Account');
+  const locale = useLocale();
+  const approverOptions = members.filter(
+    (member) => member.status === 'active' && member.role === 'admin',
+  );
+  const fallbackApprover = members.find((member) => member.status === 'active');
+  const selectedApprover =
+    members.find((member) => member.id === settings.defaultApproverMemberId) ??
+    approverOptions[0] ??
+    fallbackApprover;
+  const thresholdValue =
+    settings.amountThresholdCents === null ? '' : String(settings.amountThresholdCents / 100);
+
+  function updateSettings(
+    patch: Partial<Omit<AdminApprovalSettings, 'enterpriseId' | 'updatedAt'>>,
+  ) {
+    updateApprovalSettings(profile.enterpriseId, patch, profile.contactName);
+  }
+
+  return (
+    <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="text-brand-500 mt-1 size-5 shrink-0" />
+          <div>
+            <h2 className="text-text-strong text-xl font-semibold">{t('approvalSettingsTitle')}</h2>
+            <p className="text-text-muted mt-1.5 text-sm leading-relaxed md:text-base">
+              {t('approvalSettingsHint')}
+            </p>
+          </div>
+        </div>
+        <Badge variant="standard">{t('adminOnly')}</Badge>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
+        <div className="bg-bg-surface rounded-lg p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label={t('approvalDefaultApprover')}>
+              <Select
+                value={selectedApprover?.id ?? ''}
+                onValueChange={(defaultApproverMemberId) =>
+                  updateSettings({ defaultApproverMemberId })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(approverOptions.length > 0 ? approverOptions : members).map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label={t('approvalAmountThreshold')}>
+              <Input
+                type="number"
+                min="0"
+                value={thresholdValue}
+                placeholder={t('approvalAmountPlaceholder')}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  const numericValue = Number(value);
+                  updateSettings({
+                    amountThresholdCents:
+                      value && Number.isFinite(numericValue)
+                        ? Math.max(0, Math.round(numericValue * 100))
+                        : null,
+                  });
+                }}
+              />
+            </Field>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            <ApprovalToggle
+              checked={settings.requireBuyerOrderApproval}
+              title={t('approvalBuyerOrders')}
+              body={t('approvalBuyerOrdersHint')}
+              onChange={(requireBuyerOrderApproval) =>
+                updateSettings({ requireBuyerOrderApproval })
+              }
+            />
+            <ApprovalToggle
+              checked={settings.requireQuoteOrderApproval}
+              title={t('approvalQuoteOrders')}
+              body={t('approvalQuoteOrdersHint')}
+              onChange={(requireQuoteOrderApproval) =>
+                updateSettings({ requireQuoteOrderApproval })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="bg-bg-surface rounded-lg p-4">
+          <h3 className="text-text-strong font-semibold">{t('approvalRuleTitle')}</h3>
+          <div className="text-text-muted mt-3 space-y-2 text-sm">
+            <p>
+              {t('approvalRuleApprover', {
+                name: selectedApprover?.name ?? t('approvalUnassigned'),
+              })}
+            </p>
+            <p>
+              {settings.requireBuyerOrderApproval
+                ? t('approvalRuleBuyerRequired')
+                : t('approvalRuleBuyerOptional')}
+            </p>
+            <p>
+              {settings.requireQuoteOrderApproval
+                ? t('approvalRuleQuoteRequired')
+                : t('approvalRuleQuoteOptional')}
+            </p>
+            <p>
+              {settings.amountThresholdCents === null
+                ? t('approvalRuleNoThreshold')
+                : t('approvalRuleThreshold', {
+                    amount: formatPrice(
+                      settings.amountThresholdCents,
+                      'CNY',
+                      locale === 'zh' ? 'zh-CN' : 'en-US',
+                    ),
+                  })}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ApprovalToggle({
+  checked,
+  title,
+  body,
+  onChange,
+}: {
+  checked: boolean;
+  title: string;
+  body: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="bg-bg-control hover:bg-bg-control-hover flex cursor-pointer items-start gap-3 rounded-md p-3 transition-colors">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="accent-brand-500 mt-1 size-4"
+      />
+      <span>
+        <span className="text-text-strong block text-sm font-medium">{title}</span>
+        <span className="text-text-muted mt-1 block text-sm leading-relaxed">{body}</span>
+      </span>
+    </label>
   );
 }
 
@@ -1123,7 +1361,7 @@ function PermissionToggleGroup({
             aria-pressed={selected}
             disabled={disabled}
             onClick={() => onToggle(permission)}
-            className={`rounded-sm px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`min-h-[36px] rounded-sm px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               selected
                 ? 'bg-text-strong text-bg-elevated font-semibold'
                 : 'bg-bg-control text-text-muted hover:text-text'
@@ -1166,13 +1404,15 @@ function InvoiceManagementPanel({
   );
 
   return (
-    <section className="bg-bg-elevated rounded-lg p-5">
+    <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <ReceiptText className="text-brand-500 mt-1 size-5 shrink-0" />
           <div>
             <h2 className="text-text-strong text-xl font-semibold">{t('invoicesTitle')}</h2>
-            <p className="text-text-muted mt-2 text-lg leading-relaxed">{t('invoicesHint')}</p>
+            <p className="text-text-muted mt-1.5 text-sm leading-relaxed md:text-base">
+              {t('invoicesHint')}
+            </p>
           </div>
         </div>
         <Badge variant="standard">
@@ -1180,10 +1420,10 @@ function InvoiceManagementPanel({
         </Badge>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
         <div className="bg-bg-surface rounded-lg p-4">
           <h3 className="text-text-strong font-semibold">{t('invoiceEditTitle')}</h3>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-4">
             <Field label={t('invoiceTitle')}>
               <Input
                 value={checkoutDraft.invoiceTitle}
@@ -1196,7 +1436,7 @@ function InvoiceManagementPanel({
                 onChange={(event) => updateCheckoutDraft({ taxId: event.target.value })}
               />
             </Field>
-            <Field label={t('bankAccount')} className="md:col-span-2">
+            <Field label={t('bankAccount')}>
               <Input
                 value={checkoutDraft.bankAccount}
                 onChange={(event) => updateCheckoutDraft({ bankAccount: event.target.value })}
@@ -1294,7 +1534,7 @@ function InvoiceManagementPanel({
                   )}
                 </div>
                 <Button variant="secondary" size="sm" asChild>
-                  <Link href={`/store/orders/${encodeURIComponent(order.orderNo)}`}>
+                  <Link href={`/${locale}/orders/${encodeURIComponent(order.orderNo)}`}>
                     <ClipboardCheck className="size-4" />
                     <span>{t('viewOrderDetail')}</span>
                   </Link>
@@ -1323,13 +1563,13 @@ function OverviewCard({
     <button
       type="button"
       onClick={onClick}
-      className="bg-bg-elevated hover:bg-bg-control min-h-[112px] rounded-lg p-4 text-left transition-colors"
+      className="bg-bg-elevated hover:bg-bg-control min-h-[88px] rounded-lg p-3 text-left transition-colors"
     >
       <span className="text-text-muted text-sm">{title}</span>
-      <span className="text-text-strong mt-3 block text-3xl font-semibold tabular-nums">
+      <span className="text-text-strong mt-2 block text-2xl font-semibold tabular-nums">
         {count}
       </span>
-      <span className="text-text-muted mt-2 block text-sm leading-relaxed">{body}</span>
+      <span className="text-text-muted mt-1.5 block text-sm leading-relaxed">{body}</span>
     </button>
   );
 }
@@ -1340,26 +1580,42 @@ function ProjectActionGroup({
   hint,
   count,
   children,
+  showAllLabel,
+  collapseLabel,
 }: {
   icon: React.ReactNode;
   title: string;
   hint: string;
   count: string;
   children: React.ReactNode;
+  showAllLabel: string;
+  collapseLabel: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const childItems = Children.toArray(children);
+  const visibleItems = expanded ? childItems : childItems.slice(0, 1);
+  const hasHiddenItems = childItems.length > visibleItems.length || expanded;
+
   return (
-    <div className="bg-bg-surface rounded-lg p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="bg-bg-surface rounded-lg p-[16px]">
+      <div className="flex flex-col gap-[12px] sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-[12px]">
             {icon}
             <h3 className="text-text-strong text-lg font-semibold">{title}</h3>
           </div>
-          <p className="text-text-muted mt-2 text-sm leading-relaxed">{hint}</p>
+          <p className="text-text-muted mt-[8px] text-sm leading-relaxed">{hint}</p>
         </div>
         <Badge variant="standard">{count}</Badge>
       </div>
-      <div className="mt-4 space-y-3">{children}</div>
+      <div className="mt-[16px] flex flex-col gap-[12px]">{visibleItems}</div>
+      {hasHiddenItems && (
+        <div className="mt-[12px] flex justify-center">
+          <Button variant="secondary" size="sm" onClick={() => setExpanded((value) => !value)}>
+            <span>{expanded ? collapseLabel : showAllLabel}</span>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1367,7 +1623,6 @@ function ProjectActionGroup({
 export function OrderRow({
   order,
   locale,
-  roleLabel,
   statusLabel,
   submittedAtLabel,
   canApprove,
@@ -1378,11 +1633,11 @@ export function OrderRow({
   onAdvance,
   detailHref,
   showDetails = false,
+  detailOnly = false,
   labels,
 }: {
   order: LocalOrderSnapshot;
   locale: string;
-  roleLabel: string;
   statusLabel: string;
   submittedAtLabel: string;
   canApprove: boolean;
@@ -1393,6 +1648,7 @@ export function OrderRow({
   onAdvance: () => void;
   detailHref?: string;
   showDetails?: boolean;
+  detailOnly?: boolean;
   labels: {
     items: string;
     approval: string;
@@ -1466,92 +1722,114 @@ export function OrderRow({
     downloadCsv(`${order.orderNo}-bom.csv`, buildBomCsv(order, locale, labels.csvHeaders));
   }
 
-  return (
-    <article className="bg-bg-surface rounded-lg p-4">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-text-strong text-lg font-semibold">{order.orderNo}</p>
-            <Badge variant={statusVariant(order.status)}>
-              <StatusIcon className="size-3.5" />
-              {statusLabel}
-            </Badge>
-          </div>
-          <p className="text-text mt-2 text-lg">{order.projectName}</p>
-          <div className="text-text-muted mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            <span>{submittedAtLabel}</span>
-            <span>{roleLabel}</span>
-            <span>{labels.submittedBy}</span>
-            <span>{orderSourceLabel}</span>
-            {isOsOrder && <span>{`${labels.osProject}: ${order.projectName}`}</span>}
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] xl:min-w-[420px]">
-          <div>
-            <p className="text-text-muted text-xs">{labels.items}</p>
-            <p className="text-text-strong mt-1 text-lg font-medium">{order.itemCount}</p>
-          </div>
-          <div>
-            <p className="text-text-muted text-xs">{labels.payment}</p>
-            <p className="text-text-strong mt-1 text-lg font-medium tabular-nums">
-              {formatPrice(order.subtotalCents, 'CNY', locale === 'zh' ? 'zh-CN' : 'en-US')}
-            </p>
-          </div>
-          <div className="sm:text-right">
-            <p className="text-text-muted text-xs">{labels.approval}</p>
-            <p className="text-text-muted mt-1 text-sm">{latestEvent(order, locale)}</p>
-            <p className="text-text-strong mt-1 text-sm">{labels.approvalOwner}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {canApprove && (
-          <Button variant="secondary" size="sm" onClick={onApprove}>
-            <FileCheck2 className="size-4" />
-            <span>{labels.approve}</span>
-          </Button>
-        )}
-        {canPay && (
-          <Button variant="primary" size="sm" onClick={onPay}>
-            <CircleDollarSign className="size-4" />
-            <span>{labels.pay}</span>
-          </Button>
-        )}
-        {canAdvance && (
-          <Button variant="secondary" size="sm" onClick={onAdvance}>
-            <FileCheck2 className="size-4" />
-            <span>{labels.advance}</span>
-          </Button>
-        )}
-        {!canApprove && !canPay && !canAdvance && (
-          <span className="text-text-muted bg-bg-control inline-flex h-[32px] items-center rounded-sm px-3 text-md">
-            {labels.locked}
-          </span>
-        )}
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={!canDownloadBom}
-          onClick={handleDownloadBom}
-        >
-          <Download className="size-4" />
-          <span>{canDownloadBom ? labels.downloadBom : labels.downloadUnavailable}</span>
+  const actionControls = (
+    <>
+      {canApprove && (
+        <Button variant="secondary" size="sm" className="h-[36px] px-3" onClick={onApprove}>
+          <FileCheck2 className="size-4" />
+          <span>{labels.approve}</span>
         </Button>
-        {detailHref && (
-          <Button variant="secondary" size="sm" asChild>
-            <Link href={detailHref}>
-              <ClipboardCheck className="size-4" />
-              <span>{labels.viewDetail}</span>
-            </Link>
-          </Button>
-        )}
-      </div>
+      )}
+      {canPay && (
+        <Button variant="primary" size="sm" className="h-[36px] px-3" onClick={onPay}>
+          <CircleDollarSign className="size-4" />
+          <span>{labels.pay}</span>
+        </Button>
+      )}
+      {canAdvance && (
+        <Button variant="secondary" size="sm" className="h-[36px] px-3" onClick={onAdvance}>
+          <FileCheck2 className="size-4" />
+          <span>{labels.advance}</span>
+        </Button>
+      )}
+      {!canApprove && !canPay && !canAdvance && showDetails && !detailOnly && (
+        <span className="text-text-muted bg-bg-control inline-flex h-[36px] items-center rounded-sm px-3 text-md">
+          {labels.locked}
+        </span>
+      )}
+      <Button
+        variant="secondary"
+        size="sm"
+        className="h-[36px] px-3"
+        disabled={!canDownloadBom}
+        onClick={handleDownloadBom}
+      >
+        <Download className="size-4" />
+        <span>{canDownloadBom ? labels.downloadBom : labels.downloadUnavailable}</span>
+      </Button>
+      {detailHref && (
+        <Button variant="secondary" size="sm" className="h-[36px] px-3" asChild>
+          <Link href={detailHref}>
+            <ClipboardCheck className="size-4" />
+            <span>{labels.viewDetail}</span>
+          </Link>
+        </Button>
+      )}
+    </>
+  );
+
+  return (
+    <article className="bg-bg-surface rounded-lg p-2.5 md:p-3">
+      {!detailOnly && (
+        <div className="flex flex-col gap-2.5 md:gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-text-strong text-base font-semibold md:text-lg">
+                {order.orderNo}
+              </p>
+              <Badge variant={statusVariant(order.status)}>
+                <StatusIcon className="size-3.5" />
+                {statusLabel}
+              </Badge>
+            </div>
+            <p className="text-text mt-1 text-base font-medium">
+              {order.projectName}
+            </p>
+            <div className="text-text-muted mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-sm md:gap-x-4">
+              <span>{submittedAtLabel}</span>
+              <span>{labels.submittedBy}</span>
+              <span>{orderSourceLabel}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_1fr_auto] xl:min-w-[400px]">
+            <div>
+              <p className="text-text-muted text-xs">{labels.items}</p>
+              <p className="text-text-strong mt-1 text-base font-medium">{order.itemCount}</p>
+            </div>
+            <div>
+              <p className="text-text-muted text-xs">{labels.payment}</p>
+              <p className="text-text-strong mt-1 text-base font-medium tabular-nums">
+                {formatPrice(order.subtotalCents, 'CNY', locale === 'zh' ? 'zh-CN' : 'en-US')}
+              </p>
+            </div>
+            <div className="col-span-2 sm:col-span-1 sm:text-right">
+              <p className="text-text-muted text-xs">{labels.approval}</p>
+              <p className="text-text-muted mt-1 text-sm">{latestEvent(order, locale)}</p>
+              <p className="text-text-strong mt-1 text-sm">{labels.approvalOwner}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(!detailOnly || !showDetails) && (
+        <div
+          className={`${detailOnly ? '' : 'mt-3'} flex flex-wrap items-center gap-1.5 md:gap-2`}
+        >
+          {actionControls}
+        </div>
+      )}
 
       {showDetails && (
         <>
-          <OrderProgress status={order.status} labels={labels.progressSteps} />
+          {detailOnly ? (
+            <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)] md:items-center">
+              <div className="flex flex-wrap items-center gap-1.5 md:gap-2">{actionControls}</div>
+              <OrderProgress status={order.status} labels={labels.progressSteps} className="mt-0" />
+            </div>
+          ) : (
+            <OrderProgress status={order.status} labels={labels.progressSteps} />
+          )}
 
           <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
             <div className="bg-bg-elevated rounded-md p-3">
@@ -1561,9 +1839,9 @@ export function OrderRow({
                   {order.lines.map((line) => (
                     <div
                       key={`${order.orderNo}-${line.productId}`}
-                      className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_64px_96px_96px]"
+                      className="grid grid-cols-3 gap-x-3 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_64px_96px_96px] sm:gap-3"
                     >
-                      <div className="min-w-0">
+                      <div className="col-span-3 min-w-0 sm:col-span-1">
                         <p className="text-text-strong truncate text-sm">
                           {line.name[locale === 'zh' ? 'zh' : 'en']}
                         </p>
@@ -1580,11 +1858,11 @@ export function OrderRow({
                           )}
                         </div>
                       </div>
-                      <div className="text-sm sm:text-right">
+                      <div className="min-w-0 text-sm sm:text-right">
                         <p className="text-text-muted">{labels.qty}</p>
                         <p className="text-text-strong font-medium tabular-nums">{line.qty}</p>
                       </div>
-                      <div className="text-sm sm:text-right">
+                      <div className="min-w-0 text-sm sm:text-right">
                         <p className="text-text-muted">{labels.unitPrice}</p>
                         <p className="text-text-strong font-medium tabular-nums">
                           {formatPrice(
@@ -1594,7 +1872,7 @@ export function OrderRow({
                           )}
                         </p>
                       </div>
-                      <div className="text-sm sm:text-right">
+                      <div className="min-w-0 text-sm sm:text-right">
                         <p className="text-text-muted">{labels.lineSubtotal}</p>
                         <p className="text-text-strong font-medium tabular-nums">
                           {formatPrice(
@@ -1718,7 +1996,7 @@ function HandoffRow({
         {canAccept ? (
           <Button variant="secondary" size="sm" asChild>
             <Link
-              href={`/store/checkout?from=os&project=${encodeURIComponent(
+              href={`/${locale}/checkout?from=os&project=${encodeURIComponent(
                 handoff.projectName,
               )}&projectId=${encodeURIComponent(handoff.projectId)}`}
               onClick={onAccept}
@@ -1728,7 +2006,7 @@ function HandoffRow({
             </Link>
           </Button>
         ) : (
-          <span className="text-text-muted bg-bg-control rounded-sm px-3 py-1 text-sm">
+          <span className="text-text-muted bg-bg-control inline-flex min-h-[36px] items-center rounded-sm px-3 text-sm">
             {labels.locked}
           </span>
         )}
@@ -1795,7 +2073,7 @@ function QuoteRequestRow({
         </div>
       </div>
 
-      <div className="divide-divider mt-3 divide-y">
+      <div className="divide-divider mt-3 hidden divide-y lg:block">
         {request.lines.map((line) => (
           <div
             key={`${request.requestNo}-${line.productId}`}
@@ -1831,7 +2109,7 @@ function QuoteRequestRow({
           </Button>
         )}
         {!canProvide && !canAccept && (
-          <span className="text-text-muted bg-bg-control rounded-sm px-3 py-1 text-sm">
+          <span className="text-text-muted bg-bg-control inline-flex min-h-[36px] items-center rounded-sm px-3 text-sm">
             {labels.locked}
           </span>
         )}
@@ -1843,9 +2121,11 @@ function QuoteRequestRow({
 function OrderProgress({
   status,
   labels,
+  className,
 }: {
   status: OrderStatus;
   labels: Record<OrderStatus, string>;
+  className?: string;
 }) {
   const steps: OrderStatus[] = [
     status === 'pending-quote' ? 'pending-quote' : 'pending-approval',
@@ -1858,13 +2138,13 @@ function OrderProgress({
   const currentIndex = steps.indexOf(status);
 
   return (
-    <div className="mt-4 grid gap-2 sm:grid-cols-6">
+    <div className={cn('mt-4 grid grid-cols-3 gap-1.5 sm:grid-cols-6 sm:gap-2', className)}>
       {steps.map((step, index) => {
         const active = index <= currentIndex;
         return (
           <div
             key={step}
-            className={`rounded-sm px-2 py-2 text-xs transition-colors ${
+            className={`flex min-h-[36px] items-center rounded-sm px-2 py-1.5 text-xs transition-colors sm:py-2 ${
               active ? 'bg-brand-soft text-brand-500' : 'bg-bg-control text-text-muted'
             }`}
           >
@@ -1894,7 +2174,7 @@ function Field({
   );
 }
 
-function statusVariant(
+export function statusVariant(
   status: LocalOrderSnapshot['status'],
 ): 'in-stock' | 'standard' | 'secondary' {
   if (status === 'completed') return 'in-stock';

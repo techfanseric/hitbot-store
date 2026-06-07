@@ -3,7 +3,7 @@ import type { CartSource } from './cart';
 
 export type EnterpriseRole = 'admin' | 'buyer' | 'engineer';
 export type PaymentMethod = 'corporate' | 'personal';
-export type ApprovalMode = 'buyer-review' | 'admin-review' | 'admin-direct';
+export type ApprovalMode = 'buyer-review' | 'admin-review' | 'admin-direct' | 'not-required';
 export type OrderStatus =
   | 'pending-quote'
   | 'pending-approval'

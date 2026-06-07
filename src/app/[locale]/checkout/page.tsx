@@ -3,8 +3,8 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { CheckoutSummary } from '@/components/store/checkout-summary';
 
 export const metadata: Metadata = {
-  title: '确认项目清单',
-  description: '确认 HITBOT 官方商城项目 BOM 清单，后续接入企业账号、收货地址、付款和发票流程。',
+  title: '确认商品清单',
+  description: '确认 HITBOT 官方商城商品清单和 OS 项目 BOM，后续接入企业账号、收货地址、付款和发票流程。',
   alternates: {
     canonical: '/store/cart',
   },
@@ -51,13 +51,13 @@ export default async function CheckoutPage({ params, searchParams }: CheckoutPag
 
   return (
     <div className="bg-bg-app">
-      <div className="mx-auto w-[90%] max-w-[1400px] py-8 md:py-10">
-        <div className="mb-6 max-w-3xl">
+      <div className="mx-auto w-[90%] max-w-[1400px] py-[20px] md:py-[32px]">
+        <div className="mb-[20px] max-w-3xl">
           <p className="text-text-muted text-sm font-medium">HITBOT Store</p>
-          <h1 className="text-text-strong mt-2 text-3xl font-semibold md:text-4xl">
+          <h1 className="text-text-strong mt-1.5 text-2xl font-semibold md:mt-2 md:text-4xl">
             {t('title')}
           </h1>
-          <p className="text-text-muted mt-2 max-w-2xl text-base leading-relaxed">
+          <p className="text-text-muted mt-1.5 hidden max-w-2xl text-sm leading-relaxed sm:block md:mt-2 md:text-base">
             {t('subtitle')}
           </p>
         </div>

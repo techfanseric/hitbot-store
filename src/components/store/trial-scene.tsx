@@ -227,5 +227,5 @@ export function TrialScene({
     };
   }, [onDeviceMove]);
 
-  return <div ref={hostRef} className="h-full min-h-[360px] w-full" />;
+  return <div ref={hostRef} className="h-full min-h-[280px] w-full" />;
 }

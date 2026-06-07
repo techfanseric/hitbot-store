@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { approvalSettingsForEnterprise, useAdminStore } from '@/lib/admin-store';
 import type {
   AddressProfile,
   ApprovalMode,
@@ -17,11 +18,15 @@ import type {
   OrderLineSnapshot,
 } from '@/types/procurement';
 
+const MOCK_ADMIN_NAME = '林若安';
+const MOCK_BUYER_NAME = '陈思远';
+const MOCK_ENGINEER_NAME = '周亦辰';
+
 const defaultProfile: EnterpriseProfile = {
   enterpriseId: 'ENT-HITBOT-CUSTOMER',
   companyName: '深圳智造装备有限公司',
   role: 'buyer',
-  contactName: '采购负责人',
+  contactName: MOCK_BUYER_NAME,
   phone: '15507540989',
   email: 'buyer@customer.example',
   signedInAt: null,
@@ -30,7 +35,7 @@ const defaultProfile: EnterpriseProfile = {
 export const DEFAULT_ENTERPRISE_ID = defaultProfile.enterpriseId;
 
 const defaultDraft: CheckoutDraft = {
-  recipient: '采购负责人',
+  recipient: MOCK_BUYER_NAME,
   phone: '15507540989',
   province: '广东省',
   city: '深圳市',
@@ -40,7 +45,7 @@ const defaultDraft: CheckoutDraft = {
   taxId: '91440300CUSTOMER01',
   bankAccount: '招商银行深圳分行 6222 **** **** 001',
   approvalMode: 'admin-review',
-  approver: '企业管理员',
+  approver: MOCK_ADMIN_NAME,
   note: '',
 };
 
@@ -62,7 +67,7 @@ const defaultAddressBook: AddressProfile[] = [
     enterpriseId: defaultProfile.enterpriseId,
     companyName: defaultProfile.companyName,
     label: '产线收货点',
-    recipient: '实验室管理员',
+    recipient: '顾明澈',
     phone: '17701551867',
     province: '广东省',
     city: '深圳市',
@@ -112,7 +117,7 @@ function orderLine(
 }
 
 const defaultOrderAddress: OrderAddressSnapshot = {
-  recipient: '采购负责人',
+  recipient: MOCK_BUYER_NAME,
   phone: '15507540989',
   province: '广东省',
   city: '深圳市',
@@ -161,8 +166,8 @@ const defaultOrders: LocalOrderSnapshot[] = [
     handoffId: 'OS-line-pack-01-20260601090000',
     role: 'engineer',
     approvalMode: 'admin-review',
-    submittedBy: '方案工程师',
-    approver: '企业管理员',
+    submittedBy: MOCK_ENGINEER_NAME,
+    approver: MOCK_ADMIN_NAME,
     paymentMethod: 'corporate',
     lines: stationUpgradeLines,
     shippingAddress: defaultOrderAddress,
@@ -182,8 +187,8 @@ const defaultOrders: LocalOrderSnapshot[] = [
     projectName: '分拣单元末端执行器补充',
     role: 'buyer',
     approvalMode: 'admin-review',
-    submittedBy: '采购负责人',
-    approvedBy: '企业管理员',
+    submittedBy: MOCK_BUYER_NAME,
+    approvedBy: MOCK_ADMIN_NAME,
     approvedAt: '2026-06-02T06:35:00.000Z',
     paymentMethod: 'corporate',
     lines: sortingCellLines,
@@ -205,8 +210,8 @@ const defaultOrders: LocalOrderSnapshot[] = [
     handoffId: 'OS-lab-fixture-03-20260603153000',
     role: 'engineer',
     approvalMode: 'buyer-review',
-    submittedBy: '方案工程师',
-    approvedBy: '采购负责人',
+    submittedBy: MOCK_ENGINEER_NAME,
+    approvedBy: MOCK_BUYER_NAME,
     approvedAt: '2026-06-03T08:05:00.000Z',
     paymentMethod: 'corporate',
     lines: labFixtureLines,
@@ -227,10 +232,10 @@ const defaultOrders: LocalOrderSnapshot[] = [
     projectName: '视觉抓取验证线',
     role: 'buyer',
     approvalMode: 'admin-review',
-    submittedBy: '采购负责人',
-    approvedBy: '企业管理员',
+    submittedBy: MOCK_BUYER_NAME,
+    approvedBy: MOCK_ADMIN_NAME,
     approvedAt: '2026-05-29T02:18:00.000Z',
-    paidBy: '采购负责人',
+    paidBy: MOCK_BUYER_NAME,
     paidAt: '2026-05-29T03:20:00.000Z',
     paymentReference: 'PAY-CORP-0529101533',
     productionStartedAt: '2026-05-30T01:00:00.000Z',
@@ -264,7 +269,7 @@ const defaultQuoteRequests: LocalQuoteRequest[] = [
     orderNo: 'HB20260603161042',
     projectName: '实验室测试夹具升级',
     lines: labFixtureLines,
-    submittedBy: '方案工程师',
+    submittedBy: MOCK_ENGINEER_NAME,
     submittedAt: '2026-06-03T07:51:08.000Z',
     updatedAt: '2026-06-03T07:51:08.000Z',
     status: 'pending-quote',
@@ -290,7 +295,7 @@ const defaultQuoteRequests: LocalQuoteRequest[] = [
         },
       ),
     ],
-    submittedBy: '采购负责人',
+    submittedBy: MOCK_BUYER_NAME,
     submittedAt: '2026-06-04T02:05:19.000Z',
     quotedAt: '2026-06-04T06:20:00.000Z',
     quotedBy: 'HITBOT 商务',
@@ -309,9 +314,9 @@ const defaultOsHandoffs: LocalOsHandoff[] = [
     projectId: 'line-pack-01',
     projectName: '包装线上料工位改造',
     itemCount: 4,
-    submittedBy: '方案工程师',
+    submittedBy: MOCK_ENGINEER_NAME,
     submittedAt: '2026-06-01T01:00:00.000Z',
-    acceptedBy: '采购负责人',
+    acceptedBy: MOCK_BUYER_NAME,
     acceptedAt: '2026-06-01T01:18:00.000Z',
     submittedOrderNo: 'HB20260601093001',
     orderSubmittedAt: '2026-06-01T01:30:00.000Z',
@@ -325,9 +330,9 @@ const defaultOsHandoffs: LocalOsHandoff[] = [
     projectId: 'lab-fixture-03',
     projectName: '实验室测试夹具升级',
     itemCount: 5,
-    submittedBy: '方案工程师',
+    submittedBy: MOCK_ENGINEER_NAME,
     submittedAt: '2026-06-03T07:30:00.000Z',
-    acceptedBy: '采购负责人',
+    acceptedBy: MOCK_BUYER_NAME,
     acceptedAt: '2026-06-03T07:45:00.000Z',
     submittedOrderNo: 'HB20260603161042',
     orderSubmittedAt: '2026-06-03T07:50:42.000Z',
@@ -341,7 +346,7 @@ const defaultOsHandoffs: LocalOsHandoff[] = [
     projectId: 'end-effector-05',
     projectName: '末端执行器备件清单',
     itemCount: 6,
-    submittedBy: '方案工程师',
+    submittedBy: MOCK_ENGINEER_NAME,
     submittedAt: '2026-06-05T03:20:00.000Z',
     updatedAt: '2026-06-05T03:20:00.000Z',
     status: 'pending',
@@ -445,10 +450,61 @@ function approvalModeForRole(role: EnterpriseRole): ApprovalMode {
   return 'admin-direct';
 }
 
-function approverForRole(role: EnterpriseRole) {
-  if (role === 'engineer') return '采购负责人';
-  if (role === 'buyer') return '企业管理员';
+function configuredApproverForEnterprise(enterpriseId: string) {
+  const adminState = useAdminStore.getState();
+  const settings = approvalSettingsForEnterprise(
+    adminState.approvalSettings,
+    adminState.members,
+    enterpriseId,
+  );
+  const approver = adminState.members.find(
+    (member) => member.id === settings.defaultApproverMemberId,
+  );
+
+  return approver?.name ?? MOCK_ADMIN_NAME;
+}
+
+function procurementOwnerForEnterprise(enterpriseId: string) {
+  const members = useAdminStore.getState().members;
+  const buyer = members.find(
+    (member) =>
+      member.enterpriseId === enterpriseId &&
+      member.status === 'active' &&
+      member.permissions.includes('orders') &&
+      member.role !== 'admin',
+  );
+
+  return buyer?.name ?? MOCK_BUYER_NAME;
+}
+
+function approverForProfile(profile: EnterpriseProfile) {
+  if (profile.role === 'engineer') return procurementOwnerForEnterprise(profile.enterpriseId);
+  if (profile.role === 'buyer') return configuredApproverForEnterprise(profile.enterpriseId);
   return '';
+}
+
+function orderRequiresApproval(
+  profile: EnterpriseProfile,
+  subtotalCents: number,
+  quoteRequired: boolean,
+) {
+  if (profile.role === 'admin') return false;
+  if (profile.role === 'engineer') return true;
+
+  const adminState = useAdminStore.getState();
+  const settings = approvalSettingsForEnterprise(
+    adminState.approvalSettings,
+    adminState.members,
+    profile.enterpriseId,
+  );
+  const amountRequiresApproval =
+    settings.amountThresholdCents !== null && subtotalCents >= settings.amountThresholdCents;
+
+  return (
+    settings.requireBuyerOrderApproval ||
+    (quoteRequired && settings.requireQuoteOrderApproval) ||
+    amountRequiresApproval
+  );
 }
 
 function normalizeCheckoutDraftForRole(
@@ -458,7 +514,7 @@ function normalizeCheckoutDraftForRole(
   return {
     ...draft,
     approvalMode: approvalModeForRole(profile.role),
-    approver: approverForRole(profile.role),
+    approver: approverForProfile(profile),
   };
 }
 
@@ -467,7 +523,7 @@ function defaultDraftForProfile(profile: EnterpriseProfile): CheckoutDraft {
     return {
       ...defaultDraft,
       approvalMode: approvalModeForRole(profile.role),
-      approver: approverForRole(profile.role),
+      approver: approverForProfile(profile),
     };
   }
 
@@ -482,7 +538,7 @@ function defaultDraftForProfile(profile: EnterpriseProfile): CheckoutDraft {
     taxId: '',
     bankAccount: '',
     approvalMode: approvalModeForRole(profile.role),
-    approver: approverForRole(profile.role),
+    approver: approverForProfile(profile),
     note: '',
   };
 }
@@ -530,19 +586,51 @@ function normalizeCompanyText(value: string | undefined, fallback = defaultProfi
   return value;
 }
 
+function normalizeMockPersonName(value: string | undefined) {
+  if (value === '企业管理员') return MOCK_ADMIN_NAME;
+  if (value === '采购负责人') return MOCK_BUYER_NAME;
+  if (value === '方案工程师') return MOCK_ENGINEER_NAME;
+  return value;
+}
+
 function normalizeOrderApproval(order: LocalOrderSnapshot): LocalOrderSnapshot {
   const storedApprovalMode = order.approvalMode as string | undefined;
-  if (storedApprovalMode !== 'self-submit') return order;
+  const withNames: LocalOrderSnapshot = {
+    ...order,
+    submittedBy: normalizeMockPersonName(order.submittedBy),
+    approver: normalizeMockPersonName(order.approver),
+    approvedBy: normalizeMockPersonName(order.approvedBy),
+    paidBy: normalizeMockPersonName(order.paidBy),
+  };
+
+  if (storedApprovalMode !== 'self-submit') return withNames;
 
   const approvalMode = order.role === 'admin' ? 'admin-direct' : 'admin-review';
   const approvedBy =
-    order.approvedBy && order.approvedBy === order.submittedBy ? '企业管理员' : order.approvedBy;
+    withNames.approvedBy && withNames.approvedBy === withNames.submittedBy
+      ? MOCK_ADMIN_NAME
+      : withNames.approvedBy;
 
   return {
-    ...order,
+    ...withNames,
     approvalMode,
-    approver: order.status === 'pending-approval' ? '企业管理员' : order.approver,
+    approver: order.status === 'pending-approval' ? MOCK_ADMIN_NAME : withNames.approver,
     approvedBy,
+  };
+}
+
+function normalizeQuoteRequestPeople(request: LocalQuoteRequest): LocalQuoteRequest {
+  return {
+    ...request,
+    submittedBy: normalizeMockPersonName(request.submittedBy),
+  };
+}
+
+function normalizeOsHandoffPeople(handoff: LocalOsHandoff): LocalOsHandoff {
+  return {
+    ...handoff,
+    submittedBy: normalizeMockPersonName(handoff.submittedBy),
+    acceptedBy: normalizeMockPersonName(handoff.acceptedBy),
   };
 }
 
@@ -602,7 +690,7 @@ export const useProcurementStore = create<ProcurementState>()(
             recipient: shouldMoveRecipient ? member.name : baseDraft.recipient,
             phone: member.phone ?? baseDraft.phone,
             approvalMode: approvalModeForRole(member.role),
-            approver: approverForRole(member.role),
+            approver: approverForProfile(nextProfile),
           };
 
           return {
@@ -650,7 +738,7 @@ export const useProcurementStore = create<ProcurementState>()(
           const nextDraft: CheckoutDraft = {
             ...state.checkoutDraft,
             approvalMode: approvalModeForRole(role),
-            approver: approverForRole(role),
+            approver: approverForProfile(nextProfile),
           };
 
           return {
@@ -811,8 +899,7 @@ export const useProcurementStore = create<ProcurementState>()(
         }
 
         const { checkoutDraft } = get();
-        const approvalMode = approvalModeForRole(profile.role);
-        const approver = approverForRole(profile.role);
+        const approver = approverForProfile(profile);
         const submittedAt = new Date().toISOString();
         const orderNo = nextOrderNo();
         const quoteLines = lines.filter(
@@ -820,9 +907,15 @@ export const useProcurementStore = create<ProcurementState>()(
         );
         const billableLines = lines.filter((line) => line.selected !== false && line.sellable);
         const quoteOnlyOrder = quoteLines.length > 0 && billableLines.length === 0;
+        const requiresApproval = orderRequiresApproval(profile, subtotalCents, quoteLines.length > 0);
+        const approvalMode: ApprovalMode = requiresApproval
+          ? approvalModeForRole(profile.role)
+          : profile.role === 'admin'
+            ? 'admin-direct'
+            : 'not-required';
         const status: LocalOrderSnapshot['status'] = quoteOnlyOrder
           ? 'pending-quote'
-          : profile.role === 'admin'
+          : !requiresApproval
             ? 'pending-payment'
             : 'pending-approval';
         const quoteRequest: LocalQuoteRequest | null = quoteLines.length
@@ -854,8 +947,12 @@ export const useProcurementStore = create<ProcurementState>()(
               approvalMode,
               submittedBy: profile.contactName,
               approver: status === 'pending-approval' ? approver : undefined,
-              approvedBy: status === 'pending-payment' ? profile.contactName : undefined,
-              approvedAt: status === 'pending-payment' ? submittedAt : undefined,
+              approvedBy:
+                status === 'pending-payment' && profile.role === 'admin'
+                  ? profile.contactName
+                  : undefined,
+              approvedAt:
+                status === 'pending-payment' && profile.role === 'admin' ? submittedAt : undefined,
               paymentMethod: checkoutDraft.paymentMethod,
               lines,
               shippingAddress,
@@ -995,17 +1092,31 @@ export const useProcurementStore = create<ProcurementState>()(
               return order;
             }
 
-            const nextStatus = profile.role === 'admin' ? 'pending-payment' : 'pending-approval';
+            const requiresApproval = orderRequiresApproval(
+              profile,
+              request.estimateCents ?? order.subtotalCents,
+              true,
+            );
+            const nextStatus = requiresApproval ? 'pending-approval' : 'pending-payment';
+            const approvalMode: ApprovalMode = requiresApproval
+              ? approvalModeForRole(profile.role)
+              : profile.role === 'admin'
+                ? 'admin-direct'
+                : 'not-required';
 
             return {
               ...order,
               status: nextStatus,
-              approvalMode: approvalModeForRole(profile.role),
+              approvalMode,
               subtotalCents: request.estimateCents ?? order.subtotalCents,
               approver:
-                nextStatus === 'pending-approval' ? approverForRole(profile.role) : undefined,
-              approvedBy: nextStatus === 'pending-payment' ? profile.contactName : undefined,
-              approvedAt: nextStatus === 'pending-payment' ? updatedAt : undefined,
+                nextStatus === 'pending-approval' ? approverForProfile(profile) : undefined,
+              approvedBy:
+                nextStatus === 'pending-payment' && profile.role === 'admin'
+                  ? profile.contactName
+                  : order.approvedBy,
+              approvedAt:
+                nextStatus === 'pending-payment' && profile.role === 'admin' ? updatedAt : undefined,
               updatedAt,
             };
           }),
@@ -1124,6 +1235,8 @@ export const useProcurementStore = create<ProcurementState>()(
           ...defaultProfile,
           ...persisted.profile,
           companyName: normalizeCompanyText(persisted.profile?.companyName),
+          contactName:
+            normalizeMockPersonName(persisted.profile?.contactName) ?? defaultProfile.contactName,
         };
         const checkoutDrafts: Record<string, CheckoutDraft> = {
           [defaultProfile.enterpriseId]: {
@@ -1135,6 +1248,8 @@ export const useProcurementStore = create<ProcurementState>()(
         const profileDraft = draftForProfile(profile, checkoutDrafts);
         const checkoutDraft = {
           ...profileDraft,
+          recipient: normalizeMockPersonName(profileDraft.recipient) ?? profileDraft.recipient,
+          approver: normalizeMockPersonName(profileDraft.approver) ?? profileDraft.approver,
           invoiceTitle: normalizeCompanyText(profileDraft.invoiceTitle, profile.companyName),
         };
 
@@ -1150,7 +1265,12 @@ export const useProcurementStore = create<ProcurementState>()(
           addressBook: (persisted.addressBook?.length
             ? persisted.addressBook
             : defaultAddressBook
-          ).map(withDefaultEnterprise),
+          ).map((address) =>
+            withDefaultEnterprise({
+              ...address,
+              recipient: normalizeMockPersonName(address.recipient) ?? address.recipient,
+            }),
+          ),
           invoiceProfiles: persisted.invoiceProfiles?.length
             ? persisted.invoiceProfiles.map((invoice) =>
                 withDefaultEnterprise({
@@ -1168,12 +1288,16 @@ export const useProcurementStore = create<ProcurementState>()(
             persisted.quoteRequests,
             defaultQuoteRequests,
             (request) => request.requestNo,
-          ).map(withDefaultEnterprise),
+          )
+            .map(normalizeQuoteRequestPeople)
+            .map(withDefaultEnterprise),
           osHandoffs: mergeDefaultRecords(
             persisted.osHandoffs,
             defaultOsHandoffs,
             (handoff) => handoff.id,
-          ).map(withDefaultEnterprise),
+          )
+            .map(normalizeOsHandoffPeople)
+            .map(withDefaultEnterprise),
         };
       },
     },

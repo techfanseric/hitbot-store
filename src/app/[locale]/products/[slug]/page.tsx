@@ -82,12 +82,15 @@ export default async function ProductPage({ params }: ProductPageProps) {
   return (
     <div className="bg-bg-app">
       <ProductStructuredData product={product} locale={locale as AppLocale} />
-      <div className="mx-auto w-[90%] max-w-[1600px] py-10 md:py-14">
+      <div className="mx-auto w-[90%] max-w-[1600px] py-6 md:py-[48px]">
         <nav
-          className="mb-8 flex flex-wrap items-center gap-2 text-lg"
+          className="mb-4 flex flex-wrap items-center gap-[8px] text-sm md:mb-[32px] md:text-lg"
           aria-label={t('breadcrumb')}
         >
-          <Link href={`/${locale}/products`} className="text-text-muted hover:text-brand-500">
+          <Link
+            href={`/${locale}/products`}
+            className="text-text-muted hover:text-brand-500 inline-flex min-h-[36px] items-center"
+          >
             {tProducts('title')}
           </Link>
           {category && (
@@ -95,50 +98,50 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <span className="text-text-disabled">/</span>
               <Link
                 href={`/${locale}/products?category=${category.id}`}
-                className="text-text-muted hover:text-brand-500"
+                className="text-text-muted hover:text-brand-500 inline-flex min-h-[36px] items-center"
               >
                 {category.name[appLocale]}
               </Link>
             </>
           )}
           <span className="text-text-disabled">/</span>
-          <span className="text-text-strong">{product.model}</span>
+          <span className="text-text-strong break-all">{product.model}</span>
         </nav>
 
-        <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:gap-16">
-          <div className="bg-bg-surface relative flex aspect-[5/4] items-center justify-center overflow-hidden rounded-lg md:aspect-square">
+        <div className="grid grid-cols-1 items-start gap-5 min-[720px]:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] min-[720px]:gap-[24px] lg:gap-[48px]">
+          <div className="bg-bg-surface relative order-2 flex aspect-[5/4] items-center justify-center overflow-hidden rounded-lg min-[720px]:order-1 lg:aspect-auto lg:h-[360px] xl:h-[420px]">
             <ProductImage
               src={product.images[0]}
               alt={product.name[locale as 'zh' | 'en']}
               model={product.model}
-              sizes="(min-width: 768px) 45vw, 90vw"
-              imageClassName="p-8 md:p-12"
+              sizes="(min-width: 720px) 45vw, 90vw"
+              imageClassName="p-[24px] md:p-[40px]"
               fallbackClassName="[&_p]:text-4xl"
               priority
             />
           </div>
 
-          <div className="py-2 md:py-8">
-            <div className="space-y-5">
-              <p className="text-text-muted text-lg font-medium">{product.model}</p>
-              <h1 className="text-text-strong text-4xl leading-tight font-semibold">
+          <div className="order-1 py-0 min-[720px]:order-2 md:py-[20px]">
+            <div className="flex flex-col gap-2.5 md:gap-[20px]">
+              <p className="text-text-muted text-sm font-medium md:text-lg">{product.model}</p>
+              <h1 className="text-text-strong text-2xl leading-tight font-semibold md:text-4xl">
                 {product.name[appLocale]}
               </h1>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-[8px]">
                 <PartClassBadge partClass={product.partClass} />
                 <StockBadge stock={product.stock} />
               </div>
 
               <p
-                className={`text-4xl font-semibold tabular-nums ${
+                className={`text-2xl font-semibold tabular-nums md:text-4xl ${
                   requiresQuote ? 'text-text-muted' : 'text-text-strong'
                 }`}
               >
                 {priceLabel}
               </p>
 
-              <p className="text-text max-w-[58ch] text-xl leading-relaxed">
+              <p className="text-text max-w-[58ch] text-sm leading-relaxed md:text-xl">
                 {product.description[locale as 'zh' | 'en']}
               </p>
 
@@ -146,7 +149,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 productId={product.id}
                 partClass={product.partClass}
                 size="lg"
-                className="w-full md:w-auto"
+                className="w-fit max-w-full"
                 disabled={outOfStock}
                 intent={actionIntent}
                 variant={outOfStock ? 'secondary' : 'primary'}
@@ -157,42 +160,39 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
         </div>
 
-        <section className="mt-12">
-          <h2 className="mb-5 text-2xl font-semibold">{t('specs')}</h2>
-          <div className="bg-bg-elevated rounded-lg p-3 md:p-4">
-            <table className="w-full border-separate border-spacing-y-1 text-lg">
-              <tbody>
-                {product.specs.map((spec, idx) => (
-                  <tr key={idx} className="last:[&_td]:pb-2">
-                    <td className="text-text-muted bg-bg-surface py-3 pr-4 pl-3 first:rounded-l-md">
-                      {spec.key[locale as 'zh' | 'en']}
-                    </td>
-                    <td className="text-text-strong bg-bg-surface py-3 pr-3 last:rounded-r-md">
-                      {spec.value}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <section className="mt-8 md:mt-[48px]">
+          <h2 className="mb-[16px] text-2xl font-semibold md:mb-[20px]">{t('specs')}</h2>
+          <dl className="bg-divider grid grid-cols-1 gap-px overflow-hidden rounded-lg text-base sm:grid-cols-2 lg:grid-cols-3 md:text-lg">
+            {product.specs.map((spec, idx) => (
+              <div
+                key={idx}
+                className="bg-bg-elevated grid min-h-[52px] grid-cols-[minmax(96px,0.42fr)_minmax(0,1fr)] items-center md:min-h-[56px]"
+              >
+                <dt className="text-text-muted min-w-0 px-[12px] py-[10px]">
+                  {spec.key[locale as 'zh' | 'en']}
+                </dt>
+                <dd className="text-text-strong min-w-0 px-[12px] py-[10px]">{spec.value}</dd>
+              </div>
+            ))}
+          </dl>
         </section>
 
         {accessories.length > 0 && (
-          <section className="mt-12">
-            <div className="mb-5 max-w-2xl">
+          <section className="mt-8 md:mt-[48px]">
+            <div className="mb-[16px] max-w-2xl md:mb-[20px]">
               <h2 className="text-2xl font-semibold">{t('compatibleAccessories')}</h2>
-              <p className="text-text-muted mt-2 text-lg leading-relaxed">
+              <p className="text-text-muted mt-[8px] text-base leading-relaxed md:text-lg">
                 {t('compatibleAccessoriesHint')}
               </p>
             </div>
-            <ProductGrid products={accessories} />
+            <ProductGrid products={accessories} variant="compact" />
           </section>
         )}
 
         {related.length > 0 && (
-          <section className="mt-12">
-            <h2 className="mb-4 text-2xl font-semibold">{t('relatedProducts')}</h2>
-            <ProductGrid products={related} />
+          <section className="mt-8 md:mt-[48px]">
+            <h2 className="mb-[16px] text-2xl font-semibold">{t('relatedProducts')}</h2>
+            <ProductGrid products={related} variant="compact" />
           </section>
         )}
       </div>

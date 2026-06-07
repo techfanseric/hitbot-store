@@ -24,7 +24,7 @@ const buttonVariants = cva(
         destructive: 'bg-brand-500 text-neutral-0 hover:bg-brand-600',
       },
       size: {
-        sm: 'h-[32px] px-3 text-md',
+        sm: 'h-[36px] px-3 text-md',
         md: 'h-[40px] px-4 text-lg',
         lg: 'h-[44px] px-5 text-lg',
         icon: 'size-[40px] p-0',

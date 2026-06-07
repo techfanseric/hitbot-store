@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Ban, Check, LogIn, MessageCircle, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCartSafe } from '@/hooks/use-cart';
+import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
 import { useProcurementStore } from '@/lib/procurement-store';
 import { cn } from '@/lib/utils';
 import type { PartClass } from '@/types/product';
@@ -35,10 +36,14 @@ export function AddToCartButton({
   const locale = useLocale();
   const router = useRouter();
   const { add } = useCartSafe();
+  const authHydrated = useProcurementHydrated();
   const isAuthenticated = useProcurementStore((state) => state.isAuthenticated);
   const [added, setAdded] = useState(false);
   const requiresAccount =
-    (intent === 'cart' || intent === 'quote') && !isAuthenticated && !buttonProps.disabled;
+    authHydrated &&
+    (intent === 'cart' || intent === 'quote') &&
+    !isAuthenticated &&
+    !buttonProps.disabled;
 
   function handleClick(e: React.MouseEvent) {
     e.preventDefault();

@@ -6,6 +6,7 @@ import { products } from '@/mock-data';
 import type {
   AdminAuditAction,
   AdminAuditLog,
+  AdminApprovalSettings,
   AdminAuditModule,
   AdminEnterpriseAccessRequest,
   AdminMember,
@@ -43,6 +44,7 @@ interface InviteMemberInput {
 interface AdminState {
   productRecords: AdminProductRecord[];
   members: AdminMember[];
+  approvalSettings: AdminApprovalSettings[];
   enterpriseAccessRequests: AdminEnterpriseAccessRequest[];
   auditLogs: AdminAuditLog[];
   updateProductRecord: (productId: string, patch: UpdateProductInput, actor?: string) => void;
@@ -55,6 +57,11 @@ interface AdminState {
   rejectEnterpriseAccessRequest: (requestId: string, actor?: string) => void;
   updateMemberRoleName: (memberId: string, roleName: string, actor?: string) => void;
   toggleMemberPermission: (memberId: string, permission: AdminPermission, actor?: string) => void;
+  updateApprovalSettings: (
+    enterpriseId: string,
+    patch: Partial<Omit<AdminApprovalSettings, 'enterpriseId' | 'updatedAt'>>,
+    actor?: string,
+  ) => void;
   inviteMember: (input: InviteMemberInput, actor?: string) => void;
   inviteEngineer: (
     actor?: string,
@@ -139,7 +146,7 @@ const defaultMembers: AdminMember[] = [
     id: 'member-admin',
     enterpriseId: 'ENT-HITBOT-CUSTOMER',
     companyName: '深圳智造装备有限公司',
-    name: '企业管理员',
+    name: '林若安',
     email: 'admin@customer.example',
     phone: '15507540989',
     role: 'admin',
@@ -152,7 +159,7 @@ const defaultMembers: AdminMember[] = [
     id: 'member-buyer',
     enterpriseId: 'ENT-HITBOT-CUSTOMER',
     companyName: '深圳智造装备有限公司',
-    name: '采购负责人',
+    name: '陈思远',
     email: 'buyer@customer.example',
     phone: '15507540989',
     role: 'buyer',
@@ -165,7 +172,7 @@ const defaultMembers: AdminMember[] = [
     id: 'member-engineer',
     enterpriseId: 'ENT-HITBOT-CUSTOMER',
     companyName: '深圳智造装备有限公司',
-    name: '方案工程师',
+    name: '周亦辰',
     email: 'engineer@customer.example',
     phone: '17701551867',
     role: 'engineer',
@@ -175,6 +182,48 @@ const defaultMembers: AdminMember[] = [
     updatedAt: '2026-06-01T00:00:00.000Z',
   },
 ];
+
+const defaultApprovalSettings: AdminApprovalSettings[] = [
+  {
+    enterpriseId: 'ENT-HITBOT-CUSTOMER',
+    defaultApproverMemberId: 'member-admin',
+    requireBuyerOrderApproval: true,
+    requireQuoteOrderApproval: true,
+    amountThresholdCents: null,
+    updatedAt: '2026-06-01T00:00:00.000Z',
+  },
+];
+
+function defaultApprovalSettingsForEnterprise(
+  enterpriseId: string,
+  members: AdminMember[],
+): AdminApprovalSettings {
+  const defaultApprover =
+    members.find(
+      (member) =>
+        member.enterpriseId === enterpriseId && member.role === 'admin' && member.status === 'active',
+    ) ?? members.find((member) => member.enterpriseId === enterpriseId && member.status === 'active');
+
+  return {
+    enterpriseId,
+    defaultApproverMemberId: defaultApprover?.id ?? '',
+    requireBuyerOrderApproval: true,
+    requireQuoteOrderApproval: true,
+    amountThresholdCents: null,
+    updatedAt: now(),
+  };
+}
+
+export function approvalSettingsForEnterprise(
+  settings: AdminApprovalSettings[],
+  members: AdminMember[],
+  enterpriseId: string,
+): AdminApprovalSettings {
+  return (
+    settings.find((item) => item.enterpriseId === enterpriseId) ??
+    defaultApprovalSettingsForEnterprise(enterpriseId, members)
+  );
+}
 
 function productRecordFor(productId: string): AdminProductRecord {
   return (
@@ -200,6 +249,7 @@ export const useAdminStore = create<AdminState>()(
     (set) => ({
       productRecords: defaultProductRecords,
       members: defaultMembers,
+      approvalSettings: defaultApprovalSettings,
       enterpriseAccessRequests: [],
       auditLogs: [],
       updateProductRecord: (productId, patch, actor = 'System') =>
@@ -328,6 +378,21 @@ export const useAdminStore = create<AdminState>()(
                   member.id === existingMember.id ? { ...member, ...enterpriseAdmin } : member,
                 )
               : [...state.members, enterpriseAdmin],
+            approvalSettings: state.approvalSettings.some(
+              (settings) => settings.enterpriseId === enterpriseId,
+            )
+              ? state.approvalSettings
+              : [
+                  ...state.approvalSettings,
+                  {
+                    enterpriseId,
+                    defaultApproverMemberId: enterpriseAdmin.id,
+                    requireBuyerOrderApproval: true,
+                    requireQuoteOrderApproval: true,
+                    amountThresholdCents: null,
+                    updatedAt: timestamp,
+                  },
+                ],
             auditLogs: appendAudit(state.auditLogs, {
               module: 'access',
               action: 'access-approve',
@@ -410,6 +475,40 @@ export const useAdminStore = create<AdminState>()(
             summary: `${memberId}:${permission}`,
           }),
         })),
+      updateApprovalSettings: (enterpriseId, patch, actor = 'System') =>
+        set((state) => {
+          const current = approvalSettingsForEnterprise(
+            state.approvalSettings,
+            state.members,
+            enterpriseId,
+          );
+          const nextSettings: AdminApprovalSettings = {
+            ...current,
+            ...patch,
+            amountThresholdCents:
+              patch.amountThresholdCents === undefined
+                ? current.amountThresholdCents
+                : patch.amountThresholdCents,
+            updatedAt: now(),
+          };
+
+          return {
+            approvalSettings: state.approvalSettings.some(
+              (settings) => settings.enterpriseId === enterpriseId,
+            )
+              ? state.approvalSettings.map((settings) =>
+                  settings.enterpriseId === enterpriseId ? nextSettings : settings,
+                )
+              : [...state.approvalSettings, nextSettings],
+            auditLogs: appendAudit(state.auditLogs, {
+              module: 'permissions',
+              action: 'member-permission',
+              actor,
+              target: enterpriseId,
+              summary: `approval-settings:${enterpriseId}`,
+            }),
+          };
+        }),
       inviteMember: (input, actor = 'System') =>
         set((state) => {
           const timestamp = now();
@@ -526,9 +625,9 @@ export const useAdminStore = create<AdminState>()(
 
               const mergedRole = defaultMember?.role ?? member.role;
               const roleName =
-                member.roleName ??
                 defaultMember?.roleName ??
-                (mergedRole === 'admin' ? '企业管理员' : (defaultMember?.name ?? member.name));
+                member.roleName ??
+                (mergedRole === 'admin' ? '企业管理员' : member.name);
 
               return {
                 ...member,
@@ -553,12 +652,24 @@ export const useAdminStore = create<AdminState>()(
               };
             })
           : defaultMembers;
+        const knownEnterpriseIds = Array.from(
+          new Set([
+            ...members.map((member) => member.enterpriseId).filter(Boolean),
+            ...defaultApprovalSettings.map((settings) => settings.enterpriseId),
+          ]),
+        ) as string[];
+        const approvalSettings = knownEnterpriseIds.map((enterpriseId) => ({
+          ...defaultApprovalSettingsForEnterprise(enterpriseId, members),
+          ...defaultApprovalSettings.find((settings) => settings.enterpriseId === enterpriseId),
+          ...persisted.approvalSettings?.find((settings) => settings.enterpriseId === enterpriseId),
+        }));
 
         return {
           ...currentState,
           ...persisted,
           productRecords,
           members,
+          approvalSettings,
           enterpriseAccessRequests,
           auditLogs: persisted.auditLogs ?? [],
         };

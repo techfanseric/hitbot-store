@@ -19,6 +19,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCartSafe } from '@/hooks/use-cart';
+import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
+import { approvalSettingsForEnterprise, useAdminStore } from '@/lib/admin-store';
 import { DEFAULT_ENTERPRISE_ID, useProcurementStore } from '@/lib/procurement-store';
 import { getProductById } from '@/mock-data';
 import { formatPrice } from '@/lib/format';
@@ -37,12 +39,12 @@ interface CheckoutSummaryProps {
 
 type CheckoutStep = 1 | 2 | 3 | 4;
 
-function osHandoffLoginHref(osHandoff: OsHandoff) {
+function osHandoffLoginHref(osHandoff: OsHandoff, locale: string) {
   const params = new URLSearchParams({ from: 'os' });
   if (osHandoff.projectName) params.set('project', osHandoff.projectName);
   params.set('projectId', osHandoff.projectId);
 
-  return `/store/login?next=${encodeURIComponent(`/store/cart?${params.toString()}`)}`;
+  return `/${locale}/login?next=${encodeURIComponent(`/${locale}/checkout?${params.toString()}`)}`;
 }
 
 function navigateWithFallback(router: ReturnType<typeof useRouter>, href: string) {
@@ -59,6 +61,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
   const tCart = useTranslations('Cart');
   const locale = useLocale();
   const router = useRouter();
+  const authHydrated = useProcurementHydrated();
   const osHandoffImportedRef = useRef(false);
   const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
   const {
@@ -67,7 +70,6 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
     projects,
     currentProjectId,
     selectedCount,
-    setProject,
     importOsBom,
     setQty,
     setSelected,
@@ -91,11 +93,15 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
     acceptOsHandoff,
     markLocalOrderPaid,
   } = useProcurementStore();
+  const adminMembers = useAdminStore((state) => state.members);
+  const approvalSettings = useAdminStore((state) => state.approvalSettings);
   const osProjectName = osHandoff?.projectName || tCart('osProjectLine');
-  const unsyncedCount = items.reduce(
-    (count, item) => count + (item.syncStatus === 'synced' ? 0 : 1),
-    0,
-  );
+  const currentProject = projects.find((project) => project.projectId === currentProjectId);
+  const hasOsProjectContext =
+    Boolean(osHandoff) ||
+    currentProject?.source === 'os' ||
+    items.some((item) => item.source === 'os');
+  const osLineCount = items.reduce((count, item) => count + (item.source === 'os' ? 1 : 0), 0);
   const purchaseItems = items.filter((item) => item.selected && item.sellable);
   const selectedSellableCount = purchaseItems.reduce((count, item) => count + item.qty, 0);
   const selectedQuoteCount = items.reduce(
@@ -176,12 +182,37 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
     isAuthenticated &&
     profile.role !== 'engineer' &&
     latestProjectOrder?.status === 'pending-payment';
+  const enterpriseApprovalSettings = isAuthenticated
+    ? approvalSettingsForEnterprise(approvalSettings, adminMembers, profile.enterpriseId)
+    : undefined;
+  const approvalSettingsOwner = enterpriseApprovalSettings
+    ? adminMembers.find((member) => member.id === enterpriseApprovalSettings.defaultApproverMemberId)
+    : undefined;
+  const amountRequiresApproval =
+    Boolean(enterpriseApprovalSettings?.amountThresholdCents) &&
+    subtotal >= (enterpriseApprovalSettings?.amountThresholdCents ?? 0);
+  const currentOrderRequiresApproval =
+    isAuthenticated &&
+    profile.role === 'buyer' &&
+    Boolean(
+      enterpriseApprovalSettings?.requireBuyerOrderApproval ||
+        (selectedQuoteCount > 0 && enterpriseApprovalSettings?.requireQuoteOrderApproval) ||
+        amountRequiresApproval,
+    );
   const approvalRouteLabel = isEngineerRole
     ? t('approvalBuyerRequired')
     : isAdminRole
       ? t('approvalAdminDirect')
-      : t('approvalAdminRequired');
-  const approvalOwnerLabel = isAdminRole ? profile.contactName : checkoutDraft.approver;
+      : currentOrderRequiresApproval
+        ? t('approvalAdminRequired')
+        : t('approvalNotRequired');
+  const approvalOwnerLabel = isAdminRole
+    ? profile.contactName
+    : currentOrderRequiresApproval
+      ? approvalSettingsOwner?.name || checkoutDraft.approver
+      : isEngineerRole
+        ? checkoutDraft.approver
+        : t('approvalNoApprover');
   const deliveryComplete =
     isEngineerRole ||
     (Boolean(checkoutDraft.recipient) &&
@@ -229,6 +260,8 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
     },
   ];
   const currentStepMeta = flowSteps.find((step) => step.index === currentStep) ?? flowSteps[0];
+  const roleLabel = t(profile.role);
+  const contactLabel = profile.contactName === roleLabel ? null : profile.contactName;
 
   function previousStep() {
     setCurrentStep((step) => Math.max(1, step - 1) as CheckoutStep);
@@ -271,7 +304,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
       projectId: osHandoff.projectId,
       projectName: osProjectName,
       itemCount: 4,
-      submittedBy: '方案工程师',
+      submittedBy: '周亦辰',
     });
     if (isAuthenticated && profile.role !== 'engineer') {
       acceptOsHandoff(osHandoff.projectId);
@@ -286,58 +319,21 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
     recordOsHandoff,
   ]);
 
-  const projectSyncSection = (
-    <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
-      <div>
-        <div>
-          <p className="text-text-muted text-sm">{tCart('projectContext')}</p>
-          <h2 className="text-text-strong mt-1 text-2xl font-semibold">{projectName}</h2>
+  const osProjectContextSection = hasOsProjectContext ? (
+    <section className="border-divider bg-bg-elevated rounded-lg border px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <GitBranch className="text-brand-500 size-4 shrink-0" />
+        <div className="min-w-0">
+          <p className="text-text-strong truncate text-sm font-semibold">
+            {tCart('osProjectContext', { project: osHandoff?.projectName || projectName })}
+          </p>
+          <p className="text-text-muted mt-0.5 text-xs">
+            {tCart('osBomImported', { count: osLineCount || items.length })}
+          </p>
         </div>
-      </div>
-
-      {projects.length > 1 && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {projects.map((project) => {
-            const active = project.projectId === currentProjectId;
-            return (
-              <button
-                key={project.projectId}
-                type="button"
-                onClick={() => setProject(project.projectId)}
-                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  active
-                    ? 'bg-brand-soft text-brand-600'
-                    : 'bg-bg-surface text-text-muted hover:text-text'
-                }`}
-              >
-                {project.projectName}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="border-divider mt-5 border-t pt-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-text-strong text-base font-semibold">{tCart('osSyncTitle')}</h3>
-              <span className="bg-bg-control text-text-muted rounded-sm px-2 py-0.5 text-xs">
-                {tCart('unsyncedCount', { count: unsyncedCount })}
-              </span>
-            </div>
-            <p className="text-text-muted mt-1 text-sm leading-relaxed">{tCart('osSyncHint')}</p>
-            {osHandoff && (
-              <p className="text-text-strong mt-2 text-sm">
-                {tCart('osHandoffHint', { project: osProjectName })}
-              </p>
-            )}
-          </div>
-        </div>
-        <p className="text-text-muted mt-3 text-sm leading-relaxed">{tCart('syncHint')}</p>
       </div>
     </section>
-  );
+  ) : null;
 
   function submit() {
     if (!canSubmit) return;
@@ -397,61 +393,75 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
         ? t('submitOrder')
         : t('submitForApproval');
 
+  if (osHandoff && !authHydrated) {
+    return <section className="bg-bg-elevated min-h-[180px] rounded-lg p-4 md:p-5" />;
+  }
+
   if (osHandoff && !isAuthenticated) {
     return (
-      <div className="space-y-5">
-        <section className="bg-bg-elevated rounded-lg p-5">
-          <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-            <div className="flex items-start gap-3">
-              <GitBranch className="text-brand-500 mt-1 size-5 shrink-0" />
-              <div>
+      <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <GitBranch className="text-brand-500 mt-1 size-5 shrink-0" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <p className="text-text-muted text-sm">{tCart('projectContext')}</p>
-                <h2 className="text-text-strong mt-1 text-2xl font-semibold">{osProjectName}</h2>
-                <p className="text-text-muted mt-3 max-w-2xl text-base leading-relaxed">
-                  {t('osHandoffLoginHint')}
-                </p>
+                <span className="bg-bg-control text-text-muted rounded-sm px-2 py-0.5 text-xs">
+                  {t('osHandoffLoginTitle')}
+                </span>
               </div>
+              <h2 className="text-text-strong mt-1 truncate text-xl font-semibold md:text-2xl">
+                {osProjectName}
+              </h2>
+              <p className="text-text-muted mt-2 max-w-3xl text-sm leading-relaxed md:text-base">
+                {t('osHandoffLoginHint')}
+              </p>
+              <p className="text-text-muted mt-1.5 max-w-3xl text-sm leading-relaxed">
+                {t('loginRequired')}
+              </p>
             </div>
-            <Button variant="primary" asChild>
-              <Link href={osHandoffLoginHref(osHandoff)}>
-                <LogIn className="size-4" />
-                {t('osHandoffLoginCta')}
-              </Link>
-            </Button>
           </div>
-        </section>
-        <section className="bg-bg-elevated rounded-lg p-8">
-          <p className="text-text-strong text-xl font-semibold">{t('osHandoffLoginTitle')}</p>
-          <p className="text-text-muted mt-3 text-base leading-relaxed">{t('loginRequired')}</p>
-        </section>
-      </div>
+          <Button variant="primary" className="w-full md:w-auto" asChild>
+            <Link href={osHandoffLoginHref(osHandoff, locale)}>
+              <LogIn className="size-4" />
+              {t('osHandoffLoginCta')}
+            </Link>
+          </Button>
+        </div>
+      </section>
     );
   }
 
   if (items.length === 0) {
     return (
       <div className="space-y-5">
-        {projectSyncSection}
-        <div className="bg-bg-elevated rounded-lg p-8 text-center">
-          <p className="text-text-muted text-lg">{t('empty')}</p>
-          <Button variant="primary" className="mt-5" asChild>
-            <Link href="/store/products">{t('backToProducts')}</Link>
-          </Button>
+        {osProjectContextSection}
+        <div className="bg-bg-elevated rounded-lg p-4 md:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-text-muted text-base">{t('empty')}</p>
+            <Button variant="primary" className="w-full sm:w-auto" asChild>
+              <Link href={`/${locale}/products`}>{t('backToProducts')}</Link>
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
-      <div className="space-y-5">
-        <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-text-strong text-xl font-semibold">{t('flowTitle')}</h2>
-              <p className="text-text-muted mt-1 text-sm leading-relaxed">{t('flowHint')}</p>
+    <div className="grid gap-4 min-[1100px]:grid-cols-[minmax(0,1fr)_320px] min-[1100px]:items-start xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="space-y-3 md:space-y-4">
+        <section className="bg-bg-elevated rounded-lg p-2 md:p-4">
+          <div className="flex flex-col gap-2 md:gap-3 min-[1100px]:flex-row min-[1100px]:items-center min-[1100px]:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-text-strong text-base font-semibold md:text-xl">
+                {t('flowTitle')}
+              </h2>
+              <p className="text-text-muted mt-1 hidden text-sm leading-relaxed xl:block">
+                {t('flowHint')}
+              </p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-4 lg:min-w-[560px]">
+            <div className="grid grid-cols-4 gap-[8px] min-[1100px]:min-w-[552px] xl:min-w-[560px]">
               {flowSteps.map((step) => {
                 const active = step.index === currentStep;
                 return (
@@ -460,20 +470,22 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                     type="button"
                     aria-current={active ? 'step' : undefined}
                     onClick={() => setCurrentStep(step.index)}
-                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
+                    className={`grid min-h-[52px] grid-cols-[32px_minmax(0,1fr)] items-center gap-[10px] rounded-md px-[10px] text-left transition-colors md:grid-cols-[36px_minmax(0,1fr)] md:px-[12px] ${
                       active
                         ? 'bg-text-strong text-bg-elevated'
                         : 'bg-bg-surface text-text-muted hover:text-text'
                     }`}
                   >
                     <span
-                      className={`flex size-6 shrink-0 items-center justify-center rounded-sm text-xs font-semibold ${
+                      className={`flex size-[32px] shrink-0 items-center justify-center rounded-sm text-sm leading-none font-semibold md:size-[36px] ${
                         active ? 'bg-bg-elevated text-text-strong' : 'bg-bg-control text-text-muted'
                       }`}
                     >
                       {step.index}
                     </span>
-                    <span className="truncate text-sm font-medium">{step.label}</span>
+                    <span className="min-w-0 truncate text-sm leading-none font-semibold">
+                      {step.label}
+                    </span>
                   </button>
                 );
               })}
@@ -481,11 +493,11 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
           </div>
         </section>
 
-        {currentStep === 1 && projectSyncSection}
+        {currentStep === 1 && osProjectContextSection}
 
         {currentStep === 1 && (
-          <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <section className="bg-bg-elevated rounded-lg p-2.5 md:p-4">
+            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2.5 md:mb-3">
               <div className="min-w-0">
                 <StepHeader index={1} title={t('itemsStepTitle')} body={projectName} />
               </div>
@@ -503,38 +515,37 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                 return (
                   <div
                     key={item.productId}
-                    className="grid grid-cols-[auto_82px_minmax(0,1fr)] gap-4 py-4 md:grid-cols-[auto_88px_minmax(0,1fr)_auto_auto_auto] md:items-center"
+                    className="grid grid-cols-[auto_72px_minmax(0,1fr)] gap-3 py-3 md:grid-cols-[auto_88px_minmax(0,1fr)_128px_112px_40px] md:items-center md:gap-4 md:py-4"
                   >
                     <input
                       type="checkbox"
                       checked={item.selected}
                       onChange={(event) => setSelected(item.productId, event.target.checked)}
                       aria-label={tCart('selectItem')}
-                      className="accent-brand-500 mt-6 size-5 shrink-0 md:mt-0"
+                      className="accent-brand-500 mt-5 size-5 shrink-0 md:mt-0"
                     />
-                    <div className="bg-bg-surface relative flex h-[72px] w-[82px] shrink-0 items-center justify-center overflow-hidden rounded-md md:h-[76px] md:w-[88px]">
+                    <div className="bg-bg-surface relative flex h-[64px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-md md:h-[76px] md:w-[88px]">
                       <ProductImage
                         src={product.images[0]}
                         alt={product.name[locale as 'zh' | 'en']}
                         model={product.model}
-                        sizes="88px"
+                        sizes="(min-width: 768px) 88px, 72px"
                         imageClassName="p-1 mix-blend-normal"
                         fallbackClassName="[&_p]:text-sm"
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-text-strong truncate text-lg font-medium">
+                      <p className="text-text-strong truncate text-base font-medium md:text-lg">
                         {product.name[locale as 'zh' | 'en']}
                       </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 md:gap-2">
                         <span className="text-text-muted text-sm">{product.model}</span>
                         <PartClassBadge partClass={item.partClass} />
-                        <span className="border-divider text-text-muted rounded-sm border px-1.5 py-0.5 text-xs font-medium">
-                          {item.source === 'os' ? tCart('sourceOs') : tCart('sourceWeb')}
-                        </span>
-                        <span className="bg-bg-control text-text-muted rounded-sm px-1.5 py-0.5 text-xs font-medium">
-                          {tCart(`syncStatus.${item.syncStatus}`)}
-                        </span>
+                        {item.source === 'os' && (
+                          <span className="border-divider text-text-muted rounded-sm border px-1.5 py-0.5 text-xs font-medium">
+                            {tCart('sourceOs')}
+                          </span>
+                        )}
                         <span className="bg-bg-control text-text-muted rounded-sm px-1.5 py-0.5 text-xs font-medium">
                           {item.selected ? t('bomIncluded') : t('bomExcluded')}
                         </span>
@@ -545,50 +556,55 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                         )}
                       </div>
                     </div>
-                    <div className="col-start-3 flex shrink-0 items-center gap-1 md:col-start-auto">
-                      <Button
-                        variant="icon"
-                        size="icon"
-                        onClick={() => setQty(item.productId, item.qty - 1)}
-                        aria-label={tCart('decrease')}
-                      >
-                        <Minus className="size-3" />
-                      </Button>
-                      <span className="text-text-strong w-8 text-center text-sm" aria-live="polite">
-                        {item.qty}
-                      </span>
-                      <Button
-                        variant="icon"
-                        size="icon"
-                        onClick={() => setQty(item.productId, item.qty + 1)}
-                        aria-label={tCart('increase')}
-                      >
-                        <Plus className="size-3" />
-                      </Button>
-                    </div>
-                    <div className="col-start-3 text-left md:col-start-auto md:text-right">
-                      <p className="text-text-strong mt-1 text-lg font-semibold tabular-nums">
-                        {formatPrice(
-                          lineSubtotal,
-                          product.currency,
-                          locale === 'zh' ? 'zh-CN' : 'en-US',
-                        )}
-                      </p>
-                      {!item.sellable && (
-                        <p className="text-text-muted mt-1 text-xs">
-                          {item.quoteRequired ? tCart('quoteOnly') : tCart('notForSale')}
+                    <div className="col-start-3 grid grid-cols-[112px_minmax(0,1fr)_40px] items-center gap-2 pt-1 sm:grid-cols-[128px_minmax(0,1fr)_40px] sm:gap-4 md:contents">
+                      <div className="flex w-[112px] shrink-0 items-center justify-center gap-1 sm:w-[128px] md:justify-self-center">
+                        <Button
+                          variant="icon"
+                          size="icon"
+                          onClick={() => setQty(item.productId, item.qty - 1)}
+                          aria-label={tCart('decrease')}
+                        >
+                          <Minus className="size-3" />
+                        </Button>
+                        <span
+                          className="text-text-strong w-6 text-center text-sm sm:w-8"
+                          aria-live="polite"
+                        >
+                          {item.qty}
+                        </span>
+                        <Button
+                          variant="icon"
+                          size="icon"
+                          onClick={() => setQty(item.productId, item.qty + 1)}
+                          aria-label={tCart('increase')}
+                        >
+                          <Plus className="size-3" />
+                        </Button>
+                      </div>
+                      <div className="min-w-0 justify-self-end text-right md:w-[112px]">
+                        <p className="text-text-strong text-base leading-tight font-semibold tabular-nums md:text-lg">
+                          {formatPrice(
+                            lineSubtotal,
+                            product.currency,
+                            locale === 'zh' ? 'zh-CN' : 'en-US',
+                          )}
                         </p>
-                      )}
+                        {!item.sellable && (
+                          <p className="text-text-muted mt-1 text-xs leading-tight">
+                            {item.quoteRequired ? tCart('quoteOnly') : tCart('notForSale')}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="icon"
+                        size="icon"
+                        className="justify-self-end md:justify-self-center"
+                        onClick={() => remove(item.productId)}
+                        aria-label={tCart('remove')}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
                     </div>
-                    <Button
-                      variant="icon"
-                      size="icon"
-                      className="col-start-3 justify-self-start md:col-start-auto"
-                      onClick={() => remove(item.productId)}
-                      aria-label={tCart('remove')}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
                   </div>
                 );
               })}
@@ -797,23 +813,36 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                   </div>
                 </div>
                 <Button variant="primary" className="mt-4 w-full" asChild>
-                  <Link href="/store/login?next=/store/cart">{t('signIn')}</Link>
+                  <Link href={`/${locale}/login?next=/${locale}/checkout`}>{t('signIn')}</Link>
                 </Button>
               </div>
             )}
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <div className="bg-bg-surface rounded-lg p-4">
+            <div className="border-divider mt-5 grid gap-4 border-t pt-4 md:grid-cols-2">
+              <div>
                 <p className="text-text-muted">{t('orderSummary')}</p>
-                <p className="text-text-strong mt-2 text-2xl font-semibold tabular-nums">
+                <p className="text-text-strong mt-1 text-xl font-semibold tabular-nums">
                   {formatPrice(subtotal, 'CNY', locale === 'zh' ? 'zh-CN' : 'en-US')}
                 </p>
               </div>
-              <div className="bg-bg-surface rounded-lg p-4">
-                <p className="text-text-strong font-medium">{t('currentRole')}</p>
-                <p className="text-text-muted mt-1 text-sm">{t(profile.role)}</p>
-                <p className="text-text-strong mt-4 font-medium">{profile.companyName}</p>
-                <p className="text-text-muted mt-1 text-sm">{profile.contactName}</p>
-              </div>
+              <dl className="grid gap-2 text-sm">
+                <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-3">
+                  <dt className="text-text-muted">{t('currentRole')}</dt>
+                  <dd className="text-text-strong truncate font-medium">{roleLabel}</dd>
+                </div>
+                <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-3">
+                  <dt className="text-text-muted">{t('companyLabel')}</dt>
+                  <dd className="min-w-0">
+                    <span className="text-text-strong block truncate font-medium">
+                      {profile.companyName}
+                    </span>
+                    {contactLabel && (
+                      <span className="text-text-muted mt-0.5 block truncate text-xs">
+                        {contactLabel}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
             </div>
             {latestProjectOrder && (
               <div className="bg-brand-soft mt-5 rounded-lg p-4">
@@ -943,7 +972,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                     : t('cashierUnavailable')}
                 </Button>
                 <Button variant="secondary" className="mt-3 w-full" asChild>
-                  <Link href="/store/orders">{t('viewOrders')}</Link>
+                  <Link href={`/${locale}/orders`}>{t('viewOrders')}</Link>
                 </Button>
               </div>
             )}
@@ -951,25 +980,36 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
         )}
       </div>
 
-      <aside className="bg-bg-elevated rounded-lg p-5 lg:sticky lg:top-[124px] lg:self-start">
+      <aside className="bg-bg-elevated rounded-lg p-3 md:p-4 min-[1100px]:sticky min-[1100px]:top-[124px] min-[1100px]:self-start">
         <p className="text-text-muted text-sm">
           {t('currentStep', { step: currentStep, total: flowSteps.length })}
         </p>
-        <h2 className="text-text-strong mt-1 text-xl font-semibold">{currentStepMeta.title}</h2>
+        <h2 className="text-text-strong mt-1 text-lg font-semibold">{currentStepMeta.title}</h2>
         <p className="text-text-muted mt-2 text-sm leading-relaxed">{currentStepMeta.hint}</p>
-        <div className="mt-4 flex items-center justify-between">
+        <div className="border-divider mt-4 flex items-center justify-between border-t pt-4">
           <span className="text-text-muted">{t('orderSummary')}</span>
-          <span className="text-text-strong text-2xl font-semibold tabular-nums">
+          <span className="text-text-strong text-xl font-semibold tabular-nums">
             {formatPrice(subtotal, 'CNY', locale === 'zh' ? 'zh-CN' : 'en-US')}
           </span>
         </div>
-        <div className="bg-bg-surface mt-5 rounded-lg p-4">
-          <p className="text-text-strong font-medium">{t('currentRole')}</p>
-          <p className="text-text-muted mt-1 text-sm">{t(profile.role)}</p>
-          <p className="text-text-strong mt-4 font-medium">{profile.companyName}</p>
-          <p className="text-text-muted mt-1 text-sm">{profile.contactName}</p>
-        </div>
-        <p className="text-text-muted mt-4 text-sm leading-relaxed">
+        <dl className="border-divider mt-3 grid gap-2 border-t pt-3 text-sm">
+          <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-3">
+            <dt className="text-text-muted">{t('currentRole')}</dt>
+            <dd className="text-text-strong min-w-0 truncate font-medium">{roleLabel}</dd>
+          </div>
+          <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-3">
+            <dt className="text-text-muted">{t('companyLabel')}</dt>
+            <dd className="min-w-0">
+              <span className="text-text-strong block truncate font-medium">
+                {profile.companyName}
+              </span>
+              {contactLabel && (
+                <span className="text-text-muted mt-0.5 block truncate text-xs">{contactLabel}</span>
+              )}
+            </dd>
+          </div>
+        </dl>
+        <p className="text-text-muted border-divider mt-3 border-t pt-3 text-sm leading-relaxed">
           {!isAuthenticated
             ? t('signInHint')
             : isEngineerRole
@@ -980,7 +1020,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                 ? t('readyHint')
                 : t('missingHint')}
         </p>
-        <div className="mt-5 grid gap-2">
+        <div className="mt-4 grid gap-2">
           {currentStep > 1 && (
             <Button variant="secondary" className="w-full" onClick={previousStep}>
               {t('previousStep')}

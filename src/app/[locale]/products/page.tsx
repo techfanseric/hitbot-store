@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { CategoryFilter } from '@/components/store/category-filter';
+import { ProductBannerCarousel } from '@/components/store/product-banner-carousel';
 import { ProductGrid } from '@/components/store/product-grid';
 import { products } from '@/mock-data';
 import { localizedProductsPath, PUBLIC_PRODUCTS_PATH } from '@/lib/store-paths';
@@ -104,24 +105,27 @@ export default async function ProductsPage({ params, searchParams }: ProductsPag
 
   return (
     <div className="bg-bg-app">
-      <div className="mx-auto w-[90%] max-w-[1600px] py-10 md:py-14">
-        <div className="mb-10 flex items-end justify-between gap-4">
+      <div className="mx-auto w-[90%] max-w-[1600px] py-[20px] md:py-[32px]">
+        <ProductBannerCarousel />
+        <div className="mb-4 flex flex-col gap-1.5 md:mb-5 md:flex-row md:items-end md:justify-between md:gap-[16px]">
           <div>
-            <p className="text-brand-500 mb-3 text-lg font-medium">HITBOT Store</p>
-            <h1 className="text-text-strong text-4xl font-semibold">{t('title')}</h1>
-            <p className="text-text-muted mt-3 max-w-2xl text-lg leading-relaxed">
+            <p className="text-brand-500 mb-2 text-sm font-medium md:mb-[12px] md:text-lg">
+              HITBOT Store
+            </p>
+            <h1 className="text-text-strong text-2xl font-semibold md:text-4xl">{t('title')}</h1>
+            <p className="text-text-muted mt-2 hidden max-w-2xl text-sm leading-relaxed sm:block md:mt-[12px] md:text-lg">
               {t('selectionSubtitle')}
             </p>
           </div>
-          <span className="text-text-muted text-lg whitespace-nowrap tabular-nums">
+          <span className="text-text-muted text-sm whitespace-nowrap tabular-nums md:text-lg">
             {t('resultCount', { count: filtered.length })}
           </span>
         </div>
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-[260px_1fr] lg:gap-10">
+        <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-[260px_1fr] lg:gap-[32px]">
           <CategoryFilter />
           <div>
             {filtered.length === 0 ? (
-              <p className="text-text-muted bg-bg-surface rounded-lg py-12 text-center text-lg">
+              <p className="text-text-muted bg-bg-surface rounded-lg px-4 py-[24px] text-center text-base md:py-[32px]">
                 {t('noResults')}
               </p>
             ) : (

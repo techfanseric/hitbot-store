@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import {
   ArrowRight,
+  ChevronDown,
   CircleDollarSign,
   ClipboardCheck,
   FileCheck2,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
 import {
   Select,
   SelectContent,
@@ -22,8 +24,14 @@ import {
 } from '@/components/ui/select';
 import { DEFAULT_ENTERPRISE_ID, useProcurementStore } from '@/lib/procurement-store';
 import { formatPrice } from '@/lib/format';
-import { matchesOrderTimeFilter, type OrderTimeFilter } from '@/lib/order-filters';
+import {
+  matchesOrderTimeFilter,
+  type OrderDateRange,
+  type OrderTimeFilter,
+} from '@/lib/order-filters';
+import { cn } from '@/lib/utils';
 import { OrderRow } from './account-panel';
+import { OrderTimeFilterControl } from './order-time-filter-control';
 import type { EnterpriseProfile, LocalOrderSnapshot, OrderStatus } from '@/types/procurement';
 
 type OrderStatusFilter = 'all' | OrderStatus;
@@ -52,9 +60,12 @@ export function OrderCenter() {
   const t = useTranslations('Orders');
   const tAccount = useTranslations('Account');
   const locale = useLocale();
+  const authHydrated = useProcurementHydrated();
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState<OrderTimeFilter>('all');
+  const [customTimeRange, setCustomTimeRange] = useState<OrderDateRange>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleOrderCount, setVisibleOrderCount] = useState(ORDER_PAGE_SIZE);
   const { isAuthenticated, profile, orders, approveLocalOrder, markLocalOrderPaid } =
     useProcurementStore();
@@ -92,10 +103,15 @@ export function OrderCenter() {
       enterpriseOrders.filter((order) => {
         const statusMatch = statusFilter === 'all' || order.status === statusFilter;
         const projectMatch = projectFilter === 'all' || order.projectName === projectFilter;
-        const timeMatch = matchesOrderTimeFilter(order.submittedAt, timeFilter);
+        const timeMatch = matchesOrderTimeFilter(
+          order.submittedAt,
+          timeFilter,
+          new Date(),
+          customTimeRange,
+        );
         return statusMatch && projectMatch && timeMatch;
       }),
-    [enterpriseOrders, projectFilter, statusFilter, timeFilter],
+    [customTimeRange, enterpriseOrders, projectFilter, statusFilter, timeFilter],
   );
   const visibleOrders = filteredOrders.slice(0, visibleOrderCount);
   const hasMoreOrders = visibleOrderCount < filteredOrders.length;
@@ -113,7 +129,7 @@ export function OrderCenter() {
 
   useEffect(() => {
     setVisibleOrderCount(ORDER_PAGE_SIZE);
-  }, [projectFilter, statusFilter, timeFilter]);
+  }, [customTimeRange, projectFilter, statusFilter, timeFilter]);
   const pendingCount = enterpriseOrders.filter((order) =>
     ['pending-quote', 'pending-approval', 'pending-payment'].includes(order.status),
   ).length;
@@ -123,25 +139,33 @@ export function OrderCenter() {
   const completedCount = enterpriseOrders.filter((order) => order.status === 'completed').length;
   const totalCents = enterpriseOrders.reduce((sum, order) => sum + order.subtotalCents, 0);
 
+  if (!authHydrated) {
+    return <section className="bg-bg-elevated min-h-[180px] rounded-lg p-4 md:p-5" />;
+  }
+
   if (!isAuthenticated) {
     return (
-      <section className="bg-bg-elevated rounded-lg p-6">
-        <div className="flex max-w-2xl flex-col gap-5">
-          <Badge variant="secondary">{t('signedOutBadge')}</Badge>
-          <div>
-            <h2 className="text-text-strong text-2xl font-semibold">{t('authTitle')}</h2>
-            <p className="text-text-muted mt-3 text-lg leading-relaxed">{t('authHint')}</p>
+      <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <Badge variant="secondary">{t('signedOutBadge')}</Badge>
+            <h2 className="text-text-strong mt-3 text-xl font-semibold md:text-2xl">
+              {t('authTitle')}
+            </h2>
+            <p className="text-text-muted mt-2 max-w-2xl text-sm leading-relaxed md:text-base">
+              {t('authHint')}
+            </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row lg:shrink-0">
             <Button variant="primary" asChild>
-              <Link href="/store/login?next=/store/orders">
+              <Link href={`/${locale}/login?next=/${locale}/orders`}>
                 <LogIn className="size-4" />
                 <span>{tAccount('signIn')}</span>
               </Link>
             </Button>
             <Button variant="secondary" asChild>
-              <Link href="/store/account">
-                <span>{t('openAccount')}</span>
+              <Link href={`/${locale}/account`}>
+                <span>{t('openAccessRequest')}</span>
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
@@ -152,8 +176,8 @@ export function OrderCenter() {
   }
 
   return (
-    <div className="space-y-4">
-      <section className="grid gap-3 md:grid-cols-4">
+    <div className="flex flex-col gap-3">
+      <section className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-[12px]">
         <OrderMetric label={t('totalOrders')} value={String(enterpriseOrders.length)} />
         <OrderMetric label={t('pendingOrders')} value={String(pendingCount)} />
         <OrderMetric label={t('activeOrders')} value={String(activeCount)} />
@@ -163,30 +187,32 @@ export function OrderCenter() {
         />
       </section>
 
-      <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <ClipboardCheck className="text-brand-500 size-5" />
-              <h2 className="text-text-strong text-xl font-semibold">{t('workspaceTitle')}</h2>
+      <section className="bg-bg-elevated rounded-lg p-2.5 md:p-4">
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <ClipboardCheck className="text-brand-500 size-4 md:size-5" />
+              <h2 className="text-text-strong text-base font-semibold md:text-xl">
+                {t('workspaceTitle')}
+              </h2>
             </div>
-            <p className="text-text-muted mt-2 max-w-3xl text-base leading-relaxed">
+            <p className="text-text-muted mt-1 hidden max-w-3xl text-sm leading-relaxed xl:block">
               {t('workspaceHint', {
                 company: profile.companyName,
                 role: tAccount(profile.role),
               })}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" asChild>
-              <Link href="/store/checkout">
+          <div className="flex flex-wrap gap-1.5">
+            <Button variant="secondary" size="sm" className="h-[36px] px-3" asChild>
+              <Link href={`/${locale}/checkout`}>
                 <span>{t('continueCheckout')}</span>
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
-            <Button variant="secondary" asChild>
-              <Link href="/store/account">
-                <span>{t('openAccount')}</span>
+            <Button variant="secondary" size="sm" className="h-[36px] px-3" asChild>
+              <Link href={`/${locale}/account`}>
+                <span>{t('openWorkspace')}</span>
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
@@ -194,23 +220,26 @@ export function OrderCenter() {
         </div>
 
         {enterpriseOrders.length === 0 ? (
-          <div className="bg-bg-surface mt-5 rounded-lg p-5">
+          <div className="bg-bg-surface mt-3 rounded-lg p-4">
             <p className="text-text-strong font-medium">{tAccount('noOrders')}</p>
             <p className="text-text-muted mt-2 text-sm">{t('emptyHint')}</p>
           </div>
         ) : (
-          <div className="mt-4 space-y-3">
+          <div className="mt-2.5 space-y-2.5 md:mt-4 md:space-y-3">
             {(actionableApprovalOrders.length > 0 || payableOrders.length > 0) && (
-              <div className="bg-bg-surface flex flex-col gap-3 rounded-lg p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="bg-bg-surface flex flex-wrap items-center justify-between gap-2 rounded-lg p-2.5">
                 <div>
                   <p className="text-text-strong font-medium">{tAccount('actionQueueTitle')}</p>
-                  <p className="text-text-muted mt-1 text-sm">{tAccount('actionQueueHint')}</p>
+                  <p className="text-text-muted mt-1 hidden text-sm xl:block">
+                    {tAccount('actionQueueHint')}
+                  </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {actionableApprovalOrders.length > 0 && (
                     <Button
                       variant="secondary"
                       size="sm"
+                      className="h-[36px] px-3"
                       onClick={() => setStatusFilter('pending-approval')}
                     >
                       <FileCheck2 className="size-4" />
@@ -225,6 +254,7 @@ export function OrderCenter() {
                     <Button
                       variant="secondary"
                       size="sm"
+                      className="h-[36px] px-3"
                       onClick={() => setStatusFilter('pending-payment')}
                     >
                       <CircleDollarSign className="size-4" />
@@ -235,90 +265,114 @@ export function OrderCenter() {
               </div>
             )}
 
-            <div className="bg-bg-surface rounded-lg p-3">
-              <div className="mb-3 flex items-center gap-2">
-                <ListFilter className="text-brand-500 size-4" />
-                <p className="text-text-strong font-medium">{tAccount('filterOrders')}</p>
-              </div>
-              <div className="grid gap-3 xl:grid-cols-[1.25fr_1fr_0.8fr]">
-                <div>
-                  <p className="text-text-muted mb-2 text-xs font-medium">
-                    {tAccount('filterStatus')}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {statusFilters.map((filter) => (
-                      <button
-                        key={filter.key}
-                        type="button"
-                        onClick={() => setStatusFilter(filter.key)}
-                        className={`inline-flex h-[32px] items-center rounded-sm px-2.5 text-md transition-colors ${
-                          statusFilter === filter.key
-                            ? 'bg-bg-elevated text-text-strong font-semibold'
-                            : 'bg-bg-control text-text-muted hover:text-text'
-                        }`}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-text-muted mb-2 text-xs font-medium">
-                    {tAccount('filterProject')}
-                  </p>
-                  <Select value={projectFilter} onValueChange={setProjectFilter}>
-                    <SelectTrigger size="sm" className="w-full text-md">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-72">
-                      {projectOptions.map((project) => (
-                        <SelectItem key={project} value={project} className="text-md">
-                          {project === 'all' ? tAccount('allProjects') : project}
-                        </SelectItem>
+            <div className="bg-bg-surface rounded-lg p-2.5 md:p-3">
+              <button
+                type="button"
+                className="flex min-h-[36px] w-full items-center justify-between gap-2 text-left"
+                onClick={() => setFiltersOpen((value) => !value)}
+                aria-expanded={filtersOpen}
+              >
+                <span className="flex items-center gap-2">
+                  <ListFilter className="text-brand-500 size-4" />
+                  <span className="text-text-strong font-medium">{tAccount('filterOrders')}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="text-text-muted text-sm">
+                    {tAccount('filteredOrderCount', { count: filteredOrders.length })}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      'size-4 shrink-0 transition-transform',
+                      filtersOpen && 'rotate-180',
+                    )}
+                  />
+                </span>
+              </button>
+              <div className={cn(filtersOpen ? 'block' : 'hidden')}>
+                <div className="mt-2.5 grid gap-3 xl:grid-cols-[1.25fr_1fr_0.8fr]">
+                  <div>
+                    <p className="text-text-muted mb-2 text-xs font-medium">
+                      {tAccount('filterStatus')}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {statusFilters.map((filter) => (
+                        <button
+                          key={filter.key}
+                          type="button"
+                          onClick={() => setStatusFilter(filter.key)}
+                          className={`inline-flex h-[36px] items-center rounded-sm px-2.5 text-md transition-colors ${
+                            statusFilter === filter.key
+                              ? 'bg-bg-elevated text-text-strong font-semibold'
+                              : 'bg-bg-control text-text-muted hover:text-text'
+                          }`}
+                        >
+                          {filter.label}
+                        </button>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <p className="text-text-muted mb-2 text-xs font-medium">
-                    {tAccount('filterTime')}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {timeFilters.map((filter) => (
-                      <button
-                        key={filter.key}
-                        type="button"
-                        onClick={() => setTimeFilter(filter.key)}
-                        className={`inline-flex h-[32px] items-center rounded-sm px-2.5 text-md transition-colors ${
-                          timeFilter === filter.key
-                            ? 'bg-bg-elevated text-text-strong font-semibold'
-                            : 'bg-bg-control text-text-muted hover:text-text'
-                        }`}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-text-muted mb-2 text-xs font-medium">
+                      {tAccount('filterProject')}
+                    </p>
+                    <Select value={projectFilter} onValueChange={setProjectFilter}>
+                      <SelectTrigger size="sm" className="w-full text-md">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {projectOptions.map((project) => (
+                          <SelectItem key={project} value={project} className="text-md">
+                            {project === 'all' ? tAccount('allProjects') : project}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <p className="text-text-muted mb-2 text-xs font-medium">
+                      {tAccount('filterTime')}
+                    </p>
+                    <OrderTimeFilterControl
+                      options={timeFilters}
+                      value={timeFilter}
+                      from={customTimeRange.from ?? ''}
+                      to={customTimeRange.to ?? ''}
+                      labels={{
+                        from: tAccount('timeFrom'),
+                        to: tAccount('timeTo'),
+                      }}
+                      onValueChange={(value) => {
+                        setTimeFilter(value);
+                        setCustomTimeRange({});
+                      }}
+                      onFromChange={(value) => {
+                        const nextRange = { ...customTimeRange, from: value };
+                        setCustomTimeRange(nextRange);
+                        setTimeFilter(nextRange.from || nextRange.to ? 'custom' : 'all');
+                      }}
+                      onToChange={(value) => {
+                        const nextRange = { ...customTimeRange, to: value };
+                        setCustomTimeRange(nextRange);
+                        setTimeFilter(nextRange.from || nextRange.to ? 'custom' : 'all');
+                      }}
+                    />
                   </div>
                 </div>
               </div>
-              <p className="text-text-muted mt-3 text-sm">
-                {tAccount('filteredOrderCount', { count: filteredOrders.length })}
-              </p>
             </div>
 
             {filteredOrders.length === 0 ? (
-              <div className="bg-bg-surface rounded-lg p-5">
+              <div className="bg-bg-surface rounded-lg p-4">
                 <p className="text-text-strong font-medium">{tAccount('noFilteredOrders')}</p>
                 <p className="text-text-muted mt-2 text-sm">{tAccount('noFilteredOrdersHint')}</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5 md:space-y-3">
                 {visibleOrders.map((order) => (
                   <OrderRow
                     key={order.orderNo}
                     order={order}
                     locale={locale}
-                    roleLabel={tAccount(order.role)}
                     statusLabel={tAccount(`orderStatus.${order.status}`)}
                     submittedAtLabel={formatDate(order.submittedAt, locale)}
                     canApprove={isAuthenticated && canApproveOrder(profile, order)}
@@ -331,7 +385,7 @@ export function OrderCenter() {
                     onApprove={() => approveLocalOrder(order.orderNo)}
                     onPay={() => markLocalOrderPaid(order.orderNo)}
                     onAdvance={() => undefined}
-                    detailHref={`/store/orders/${encodeURIComponent(order.orderNo)}`}
+                    detailHref={`/${locale}/orders/${encodeURIComponent(order.orderNo)}`}
                     labels={{
                       items: tAccount('items'),
                       approval: order.approvalMode
@@ -453,9 +507,11 @@ export function OrderCenter() {
 
 function OrderMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-bg-elevated rounded-lg p-3.5">
-      <p className="text-text-muted text-sm">{label}</p>
-      <p className="text-text-strong mt-1.5 text-xl font-semibold tabular-nums">{value}</p>
+    <div className="bg-bg-elevated rounded-lg p-2.5 md:p-3.5">
+      <p className="text-text-muted text-xs md:text-sm">{label}</p>
+      <p className="text-text-strong mt-1 text-lg font-semibold tabular-nums md:mt-1.5 md:text-xl">
+        {value}
+      </p>
     </div>
   );
 }

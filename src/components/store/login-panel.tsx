@@ -25,7 +25,7 @@ interface RememberedMember {
 const rememberedMemberFallback: RememberedMember[] = [
   {
     id: 'remembered-admin',
-    name: '企业管理员',
+    name: '林若安',
     email: 'admin@customer.example',
     phone: '15507540989',
     role: 'admin',
@@ -35,7 +35,7 @@ const rememberedMemberFallback: RememberedMember[] = [
   },
   {
     id: 'remembered-buyer',
-    name: '采购负责人',
+    name: '陈思远',
     email: 'buyer@customer.example',
     phone: '15507540989',
     role: 'buyer',
@@ -45,7 +45,7 @@ const rememberedMemberFallback: RememberedMember[] = [
   },
   {
     id: 'remembered-engineer',
-    name: '方案工程师',
+    name: '周亦辰',
     email: 'engineer@customer.example',
     phone: '17701551867',
     role: 'engineer',
@@ -117,17 +117,17 @@ export function LoginPanel({ next }: { next?: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-[480px]">
-      <section className="bg-bg-elevated rounded-lg p-6">
-        <form className="grid gap-5" onSubmit={handleSubmit}>
+    <div className="mx-auto max-w-[440px]">
+      <section className="bg-bg-elevated rounded-lg p-3 md:p-4">
+        <form className="grid gap-3" onSubmit={handleSubmit}>
           <label className="relative">
-            <span className="text-text-muted mb-2 block text-sm">{t('usernameLabel')}</span>
+            <span className="text-text-muted mb-1.5 block text-sm">{t('usernameLabel')}</span>
             <div className="relative">
               <User className="text-text-muted pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
               <Input
                 value={username}
                 placeholder={t('usernamePlaceholder')}
-                className="pl-9"
+                className="pl-10"
                 autoComplete="username"
                 onFocus={() => setUsernameFocused(true)}
                 onBlur={() => setUsernameFocused(false)}
@@ -141,7 +141,7 @@ export function LoginPanel({ next }: { next?: string }) {
                   <button
                     key={member.id}
                     type="button"
-                    className="hover:bg-bg-control flex min-h-10 w-full flex-col items-start justify-center rounded-sm px-3 text-left transition-colors"
+                    className="hover:bg-bg-control flex min-h-9 w-full flex-col items-start justify-center rounded-sm px-3 text-left transition-colors"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
                       setUsername(member.email);
@@ -157,14 +157,14 @@ export function LoginPanel({ next }: { next?: string }) {
           </label>
 
           <label>
-            <span className="text-text-muted mb-2 block text-sm">{t('passwordLabel')}</span>
+            <span className="text-text-muted mb-1.5 block text-sm">{t('passwordLabel')}</span>
             <div className="relative">
               <LockKeyhole className="text-text-muted pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
               <Input
                 type="password"
                 value={password}
                 placeholder={t('passwordPlaceholder')}
-                className="pl-9"
+                className="pl-10"
                 autoComplete="current-password"
                 onChange={(event) => setPassword(event.target.value)}
               />
