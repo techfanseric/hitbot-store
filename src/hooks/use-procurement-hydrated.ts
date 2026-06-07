@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react';
 import { useProcurementStore } from '@/lib/procurement-store';
 
 export function useProcurementHydrated() {
-  const [hydrated, setHydrated] = useState(() => useProcurementStore.persist.hasHydrated());
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setHydrated(useProcurementStore.persist.hasHydrated());
-    return useProcurementStore.persist.onFinishHydration(() => setHydrated(true));
+    const persistApi = useProcurementStore.persist;
+
+    setHydrated(persistApi.hasHydrated());
+    return persistApi.onFinishHydration(() => setHydrated(true));
   }, []);
 
   return hydrated;

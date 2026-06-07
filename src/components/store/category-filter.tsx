@@ -343,8 +343,10 @@ function CategoryButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'hover:bg-bg-control flex min-h-[36px] shrink-0 items-center justify-between gap-[8px] rounded-md px-[12px] text-left text-sm transition-colors lg:w-full lg:px-[10px]',
-        active ? 'bg-text-strong text-bg-elevated font-semibold' : 'text-text bg-bg-surface',
+        'flex min-h-[36px] shrink-0 items-center justify-between gap-[8px] rounded-md px-[12px] text-left text-sm transition-colors lg:w-full lg:px-[10px]',
+        active
+          ? 'bg-text-strong text-bg-elevated font-semibold hover:bg-text-strong hover:text-bg-elevated'
+          : 'text-text bg-bg-surface hover:bg-bg-control',
       )}
     >
       <span className="truncate">{children}</span>
@@ -386,8 +388,10 @@ function FilterButton({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'hover:bg-bg-control rounded-pill inline-flex min-h-[36px] shrink-0 items-center px-[12px] text-left text-sm transition-colors',
-        active ? 'bg-brand-soft text-brand-500 font-semibold' : 'text-text',
+        'rounded-pill inline-flex min-h-[36px] shrink-0 items-center px-[12px] text-left text-sm transition-colors',
+        active
+          ? 'bg-brand-soft text-brand-500 font-semibold hover:bg-brand-soft hover:text-brand-500'
+          : 'text-text hover:bg-bg-control',
       )}
     >
       {children}
