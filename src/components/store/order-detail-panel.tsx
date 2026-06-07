@@ -7,8 +7,10 @@ import { ArrowLeft, LogIn } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
+import { approvalSettingsForEnterprise, useAdminStore } from '@/lib/admin-store';
 import { DEFAULT_ENTERPRISE_ID, useProcurementStore } from '@/lib/procurement-store';
 import { formatPrice } from '@/lib/format';
+import { canHandleWorkflowRole, workflowOwnerName } from '@/lib/order-workflow';
 import { OrderRow, statusVariant } from './account-panel';
 import type { EnterpriseProfile, LocalOrderSnapshot } from '@/types/procurement';
 
@@ -40,8 +42,21 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
   const tAccount = useTranslations('Account');
   const locale = useLocale();
   const authHydrated = useProcurementHydrated();
-  const { isAuthenticated, profile, orders, approveLocalOrder, markLocalOrderPaid } =
+  const { isAuthenticated, profile, orders, approveLocalOrder, markLocalOrderPaid, advanceLocalOrder } =
     useProcurementStore();
+  const adminMembers = useAdminStore((state) => state.members);
+  const approvalSettings = useAdminStore((state) => state.approvalSettings);
+  const enterpriseMembers = useMemo(
+    () =>
+      adminMembers.filter(
+        (member) => (member.enterpriseId ?? DEFAULT_ENTERPRISE_ID) === profile.enterpriseId,
+      ),
+    [adminMembers, profile.enterpriseId],
+  );
+  const enterpriseApprovalSettings = useMemo(
+    () => approvalSettingsForEnterprise(approvalSettings, enterpriseMembers, profile.enterpriseId),
+    [approvalSettings, enterpriseMembers, profile.enterpriseId],
+  );
   const decodedOrderNo = decodeURIComponent(orderNo);
   const order = useMemo(
     () =>
@@ -169,12 +184,18 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
         submittedAtLabel={formatDate(order.submittedAt, locale)}
         canApprove={isAuthenticated && canApproveOrder(profile, order)}
         canPay={
-          isAuthenticated && profile.role !== 'engineer' && order.status === 'pending-payment'
+          isAuthenticated &&
+          order.status === 'pending-payment' &&
+          canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'paymentInvoice')
         }
-        canAdvance={false}
+        canAdvance={
+          isAuthenticated &&
+          order.status === 'shipped' &&
+          canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'logistics')
+        }
         onApprove={() => approveLocalOrder(order.orderNo)}
         onPay={() => markLocalOrderPaid(order.orderNo)}
-        onAdvance={() => undefined}
+        onAdvance={() => advanceLocalOrder(order.orderNo)}
         showDetails
         detailOnly
         labels={{
@@ -235,14 +256,33 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
           note: tAccount('orderNote'),
           carrier: tAccount('carrier'),
           trackingNo: tAccount('trackingNo'),
-          progressSteps: {
-            'pending-quote': tAccount('orderStatus.pending-quote'),
-            'pending-approval': tAccount('orderStatus.pending-approval'),
-            'pending-payment': tAccount('orderStatus.pending-payment'),
-            paid: tAccount('orderStatus.paid'),
-            'in-production': tAccount('orderStatus.in-production'),
-            shipped: tAccount('orderStatus.shipped'),
-            completed: tAccount('orderStatus.completed'),
+          approvalFlow: {
+            title: tAccount('approvalFlowTitle'),
+            submitted: tAccount('approvalFlowSubmitted'),
+            quote: tAccount('approvalFlowQuote'),
+            delivery: tAccount('approvalFlowDelivery'),
+            approval: tAccount('approvalFlowApproval'),
+            payment: tAccount('approvalFlowPayment'),
+            fulfillment: tAccount('approvalFlowFulfillment'),
+            deliveryOwner: workflowOwnerName(
+              enterpriseApprovalSettings,
+              adminMembers,
+              'delivery',
+              tAccount('approvalUnassigned'),
+            ),
+            paymentInvoiceOwner: workflowOwnerName(
+              enterpriseApprovalSettings,
+              adminMembers,
+              'paymentInvoice',
+              tAccount('approvalUnassigned'),
+            ),
+            logisticsOwner: workflowOwnerName(
+              enterpriseApprovalSettings,
+              adminMembers,
+              'logistics',
+              tAccount('approvalUnassigned'),
+            ),
+            skipped: tAccount('approvalFlowSkipped'),
           },
           csvHeaders: {
             orderNo: tAccount('csv.orderNo'),

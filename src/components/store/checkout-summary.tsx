@@ -22,10 +22,12 @@ import { useCartSafe } from '@/hooks/use-cart';
 import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
 import { approvalSettingsForEnterprise, useAdminStore } from '@/lib/admin-store';
 import { DEFAULT_ENTERPRISE_ID, useProcurementStore } from '@/lib/procurement-store';
+import { canHandleWorkflowRole, workflowOwnerName } from '@/lib/order-workflow';
 import { getProductById } from '@/mock-data';
 import { formatPrice } from '@/lib/format';
 import { PartClassBadge } from './part-class-badge';
 import { ProductImage } from './product-image';
+import { ApprovalFlow, type ApprovalFlowStep } from './approval-flow';
 import type { PaymentMethod } from '@/types/procurement';
 
 interface OsHandoff {
@@ -142,17 +144,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
   const requiresInvoice =
     checkoutDraft.paymentMethod === 'corporate' &&
     (!checkoutDraft.invoiceTitle || !checkoutDraft.taxId || !checkoutDraft.bankAccount);
-  const canSubmitOrder =
-    isAuthenticated &&
-    !isEngineerRole &&
-    Boolean(checkoutDraft.recipient) &&
-    Boolean(checkoutDraft.phone) &&
-    Boolean(checkoutDraft.city) &&
-    Boolean(checkoutDraft.address) &&
-    selectedSubmittableCount > 0 &&
-    !requiresInvoice;
   const canSubmitHandoff = isEngineerRole && bomLineCount > 0;
-  const canSubmit = canSubmitOrder || canSubmitHandoff;
   const enterpriseOrders = isAuthenticated
     ? orders.filter(
         (order) => (order.enterpriseId ?? DEFAULT_ENTERPRISE_ID) === profile.enterpriseId,
@@ -178,10 +170,6 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
           handoff.projectId === currentProjectId,
       )
     : undefined;
-  const canPayLatest =
-    isAuthenticated &&
-    profile.role !== 'engineer' &&
-    latestProjectOrder?.status === 'pending-payment';
   const enterpriseApprovalSettings = isAuthenticated
     ? approvalSettingsForEnterprise(approvalSettings, adminMembers, profile.enterpriseId)
     : undefined;
@@ -213,6 +201,135 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
       : isEngineerRole
         ? checkoutDraft.approver
         : t('approvalNoApprover');
+  const reviewOwnerLabel = enterpriseApprovalSettings
+    ? workflowOwnerName(enterpriseApprovalSettings, adminMembers, 'review', t('approvalNoApprover'))
+    : t('approvalNoApprover');
+  const deliveryOwnerLabel = enterpriseApprovalSettings
+    ? workflowOwnerName(
+        enterpriseApprovalSettings,
+        adminMembers,
+        'delivery',
+        t('approvalNoApprover'),
+      )
+    : t('approvalNoApprover');
+  const paymentInvoiceOwnerLabel = enterpriseApprovalSettings
+    ? workflowOwnerName(
+        enterpriseApprovalSettings,
+        adminMembers,
+        'paymentInvoice',
+        t('approvalNoApprover'),
+      )
+    : t('approvalNoApprover');
+  const logisticsOwnerLabel = enterpriseApprovalSettings
+    ? workflowOwnerName(
+        enterpriseApprovalSettings,
+        adminMembers,
+        'logistics',
+        t('approvalNoApprover'),
+      )
+    : t('approvalNoApprover');
+  const canReviewOrder =
+    isAuthenticated &&
+    !isEngineerRole &&
+    Boolean(
+      enterpriseApprovalSettings &&
+        canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'review'),
+    );
+  const canEditDelivery =
+    isAuthenticated &&
+    !isEngineerRole &&
+    Boolean(
+      enterpriseApprovalSettings &&
+        canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'delivery'),
+    );
+  const canEditPaymentInvoice =
+    isAuthenticated &&
+    !isEngineerRole &&
+    Boolean(
+      enterpriseApprovalSettings &&
+        canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'paymentInvoice'),
+    );
+  const canSubmitOrder =
+    isAuthenticated &&
+    !isEngineerRole &&
+    canReviewOrder &&
+    Boolean(checkoutDraft.recipient) &&
+    Boolean(checkoutDraft.phone) &&
+    Boolean(checkoutDraft.city) &&
+    Boolean(checkoutDraft.address) &&
+    selectedSubmittableCount > 0 &&
+    !requiresInvoice;
+  const canSubmit = canSubmitOrder || canSubmitHandoff;
+  const canPayLatest =
+    isAuthenticated &&
+    profile.role !== 'engineer' &&
+    canEditPaymentInvoice &&
+    latestProjectOrder?.status === 'pending-payment';
+  const approvalFlowSteps: ApprovalFlowStep[] = isEngineerRole
+    ? [
+        {
+          key: 'handoff',
+          title: t('approvalFlowHandoff'),
+          meta: profile.contactName,
+          status: 'current',
+        },
+        {
+          key: 'review',
+          title: t('approvalFlowReview'),
+          meta: reviewOwnerLabel,
+          status: 'pending',
+        },
+        {
+          key: 'delivery',
+          title: t('approvalFlowDelivery'),
+          meta: deliveryOwnerLabel,
+          status: 'pending',
+        },
+        {
+          key: 'payment',
+          title: t('approvalFlowPaymentInvoice'),
+          meta: paymentInvoiceOwnerLabel,
+          status: 'pending',
+        },
+        {
+          key: 'logistics',
+          title: t('approvalFlowLogistics'),
+          meta: logisticsOwnerLabel,
+          status: 'pending',
+        },
+      ]
+    : [
+        {
+          key: 'review',
+          title: t('approvalFlowReview'),
+          meta: reviewOwnerLabel,
+          status: 'current',
+        },
+        {
+          key: 'delivery',
+          title: t('approvalFlowDelivery'),
+          meta: deliveryOwnerLabel,
+          status: 'pending',
+        },
+        {
+          key: 'admin',
+          title: t('approvalFlowAdmin'),
+          meta: approvalOwnerLabel,
+          status: currentOrderRequiresApproval ? 'pending' : 'skipped',
+        },
+        {
+          key: 'payment',
+          title: t('approvalFlowPaymentInvoice'),
+          meta: paymentInvoiceOwnerLabel,
+          status: isQuoteOnlySubmission ? 'skipped' : 'pending',
+        },
+        {
+          key: 'logistics',
+          title: t('approvalFlowLogistics'),
+          meta: logisticsOwnerLabel,
+          status: 'pending',
+        },
+      ];
   const deliveryComplete =
     isEngineerRole ||
     (Boolean(checkoutDraft.recipient) &&
@@ -618,6 +735,13 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
               <StepHeader index={2} title={t('deliveryStepTitle')} body={t('deliveryStepHint')} />
               <ClipboardCheck className="text-brand-500 mt-1 size-5 shrink-0" />
             </div>
+            <ResponsibilityNote
+              label={t('workflowDeliveryOwner')}
+              owner={deliveryOwnerLabel}
+              active={canEditDelivery}
+              activeText={t('workflowCanEdit')}
+              inactiveText={t('workflowViewOnly')}
+            />
 
             <div className="bg-bg-surface mb-5 rounded-lg p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -628,7 +752,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={isEngineerRole}
+                  disabled={!canEditDelivery}
                   onClick={saveCheckoutAddress}
                 >
                   {t('saveAddress')}
@@ -639,7 +763,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                   <button
                     key={address.id}
                     type="button"
-                    disabled={isEngineerRole}
+                    disabled={!canEditDelivery}
                     onClick={() => applyAddressProfile(address.id)}
                     className="bg-bg-control text-text-muted hover:text-text disabled:hover:text-text-muted rounded-sm px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -663,35 +787,35 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
               <Field label={t('recipient')}>
                 <Input
                   value={checkoutDraft.recipient}
-                  disabled={isEngineerRole}
+                  disabled={!canEditDelivery}
                   onChange={(event) => updateCheckoutDraft({ recipient: event.target.value })}
                 />
               </Field>
               <Field label={t('phone')}>
                 <Input
                   value={checkoutDraft.phone}
-                  disabled={isEngineerRole}
+                  disabled={!canEditDelivery}
                   onChange={(event) => updateCheckoutDraft({ phone: event.target.value })}
                 />
               </Field>
               <Field label={t('province')}>
                 <Input
                   value={checkoutDraft.province}
-                  disabled={isEngineerRole}
+                  disabled={!canEditDelivery}
                   onChange={(event) => updateCheckoutDraft({ province: event.target.value })}
                 />
               </Field>
               <Field label={t('city')}>
                 <Input
                   value={checkoutDraft.city}
-                  disabled={isEngineerRole}
+                  disabled={!canEditDelivery}
                   onChange={(event) => updateCheckoutDraft({ city: event.target.value })}
                 />
               </Field>
               <Field label={t('addressFull')} className="md:col-span-2">
                 <Input
                   value={checkoutDraft.address}
-                  disabled={isEngineerRole}
+                  disabled={!canEditDelivery}
                   onChange={(event) => updateCheckoutDraft({ address: event.target.value })}
                 />
               </Field>
@@ -704,6 +828,13 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
             <div className="mb-5">
               <StepHeader index={3} title={t('paymentStepTitle')} body={t('paymentStepHint')} />
             </div>
+            <ResponsibilityNote
+              label={t('workflowPaymentInvoiceOwner')}
+              owner={paymentInvoiceOwnerLabel}
+              active={canEditPaymentInvoice}
+              activeText={t('workflowCanEdit')}
+              inactiveText={t('workflowViewOnly')}
+            />
 
             <div className="grid gap-5 md:grid-cols-2">
               <OptionGroup
@@ -713,7 +844,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                   { value: 'corporate', label: t('corporatePay') },
                   { value: 'personal', label: t('personalPay') },
                 ]}
-                disabled={isEngineerRole}
+                disabled={!canEditPaymentInvoice}
                 onChange={(paymentMethod) =>
                   updateCheckoutDraft({ paymentMethod: paymentMethod as PaymentMethod })
                 }
@@ -733,7 +864,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                   variant="secondary"
                   size="sm"
                   disabled={
-                    isEngineerRole ||
+                    !canEditPaymentInvoice ||
                     !checkoutDraft.invoiceTitle ||
                     !checkoutDraft.taxId ||
                     !checkoutDraft.bankAccount
@@ -748,7 +879,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
                   <button
                     key={invoice.id}
                     type="button"
-                    disabled={isEngineerRole}
+                    disabled={!canEditPaymentInvoice}
                     onClick={() => applyInvoiceProfile(invoice.id)}
                     className="bg-bg-control text-text-muted hover:text-text disabled:hover:text-text-muted rounded-sm px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -765,21 +896,21 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
               <Field label={t('invoiceTitle')}>
                 <Input
                   value={checkoutDraft.invoiceTitle}
-                  disabled={isEngineerRole || checkoutDraft.paymentMethod !== 'corporate'}
+                  disabled={!canEditPaymentInvoice || checkoutDraft.paymentMethod !== 'corporate'}
                   onChange={(event) => updateCheckoutDraft({ invoiceTitle: event.target.value })}
                 />
               </Field>
               <Field label={t('taxId')}>
                 <Input
                   value={checkoutDraft.taxId}
-                  disabled={isEngineerRole || checkoutDraft.paymentMethod !== 'corporate'}
+                  disabled={!canEditPaymentInvoice || checkoutDraft.paymentMethod !== 'corporate'}
                   onChange={(event) => updateCheckoutDraft({ taxId: event.target.value })}
                 />
               </Field>
               <Field label={t('bankAccount')}>
                 <Input
                   value={checkoutDraft.bankAccount}
-                  disabled={isEngineerRole || checkoutDraft.paymentMethod !== 'corporate'}
+                  disabled={!canEditPaymentInvoice || checkoutDraft.paymentMethod !== 'corporate'}
                   onChange={(event) => updateCheckoutDraft({ bankAccount: event.target.value })}
                 />
               </Field>
@@ -789,7 +920,7 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
               <Field label={t('note')} className="md:col-span-2">
                 <textarea
                   value={checkoutDraft.note}
-                  disabled={isEngineerRole}
+                  disabled={!canReviewOrder}
                   onChange={(event) => updateCheckoutDraft({ note: event.target.value })}
                   className="bg-bg-control text-text-strong placeholder:text-text-muted focus-visible:ring-brand-500/35 hover:bg-bg-control-hover disabled:hover:bg-bg-control min-h-10 w-full resize-y rounded-md px-3 py-2 text-lg transition-[background-color,box-shadow] outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
                 />
@@ -1009,6 +1140,12 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
             </dd>
           </div>
         </dl>
+        <ApprovalFlow
+          title={t('approvalFlowTitle')}
+          steps={approvalFlowSteps}
+          compact
+          className="border-divider mt-3 border-t pt-3"
+        />
         <p className="text-text-muted border-divider mt-3 border-t pt-3 text-sm leading-relaxed">
           {!isAuthenticated
             ? t('signInHint')
@@ -1016,6 +1153,8 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
               ? canSubmitHandoff
                 ? t('engineerReadyHint')
                 : t('engineerMissingHint')
+              : !canReviewOrder
+                ? t('workflowReviewLockedHint', { name: reviewOwnerLabel })
               : canSubmitOrder
                 ? t('readyHint')
                 : t('missingHint')}
@@ -1081,6 +1220,31 @@ function ReadonlyValue({ children }: { children: React.ReactNode }) {
   return (
     <div className="bg-bg-control text-text-strong flex min-h-10 items-center rounded-md px-3 py-2 text-lg">
       {children}
+    </div>
+  );
+}
+
+function ResponsibilityNote({
+  label,
+  owner,
+  active,
+  activeText,
+  inactiveText,
+}: {
+  label: string;
+  owner: string;
+  active: boolean;
+  activeText: string;
+  inactiveText: string;
+}) {
+  return (
+    <div className="bg-bg-surface mb-5 flex flex-col gap-1.5 rounded-md p-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-text-muted text-sm">
+        {label}: <span className="text-text-strong font-medium">{owner}</span>
+      </p>
+      <span className="text-text-muted bg-bg-control w-fit rounded-sm px-2 py-1 text-xs">
+        {active ? activeText : inactiveText}
+      </span>
     </div>
   );
 }

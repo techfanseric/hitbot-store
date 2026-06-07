@@ -187,6 +187,10 @@ const defaultApprovalSettings: AdminApprovalSettings[] = [
   {
     enterpriseId: 'ENT-HITBOT-CUSTOMER',
     defaultApproverMemberId: 'member-admin',
+    orderReviewerMemberId: 'member-buyer',
+    deliveryOwnerMemberId: 'member-buyer',
+    paymentInvoiceOwnerMemberId: 'member-buyer',
+    logisticsOwnerMemberId: 'member-engineer',
     requireBuyerOrderApproval: true,
     requireQuoteOrderApproval: true,
     amountThresholdCents: null,
@@ -203,10 +207,26 @@ function defaultApprovalSettingsForEnterprise(
       (member) =>
         member.enterpriseId === enterpriseId && member.role === 'admin' && member.status === 'active',
     ) ?? members.find((member) => member.enterpriseId === enterpriseId && member.status === 'active');
+  const defaultBuyer =
+    members.find(
+      (member) =>
+        member.enterpriseId === enterpriseId && member.role === 'buyer' && member.status === 'active',
+    ) ?? defaultApprover;
+  const defaultLogisticsOwner =
+    members.find(
+      (member) =>
+        member.enterpriseId === enterpriseId &&
+        member.role === 'engineer' &&
+        member.status === 'active',
+    ) ?? defaultBuyer;
 
   return {
     enterpriseId,
     defaultApproverMemberId: defaultApprover?.id ?? '',
+    orderReviewerMemberId: defaultBuyer?.id ?? '',
+    deliveryOwnerMemberId: defaultBuyer?.id ?? '',
+    paymentInvoiceOwnerMemberId: defaultBuyer?.id ?? '',
+    logisticsOwnerMemberId: defaultLogisticsOwner?.id ?? defaultBuyer?.id ?? '',
     requireBuyerOrderApproval: true,
     requireQuoteOrderApproval: true,
     amountThresholdCents: null,
@@ -387,6 +407,10 @@ export const useAdminStore = create<AdminState>()(
                   {
                     enterpriseId,
                     defaultApproverMemberId: enterpriseAdmin.id,
+                    orderReviewerMemberId: enterpriseAdmin.id,
+                    deliveryOwnerMemberId: enterpriseAdmin.id,
+                    paymentInvoiceOwnerMemberId: enterpriseAdmin.id,
+                    logisticsOwnerMemberId: enterpriseAdmin.id,
                     requireBuyerOrderApproval: true,
                     requireQuoteOrderApproval: true,
                     amountThresholdCents: null,

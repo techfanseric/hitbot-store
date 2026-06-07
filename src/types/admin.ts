@@ -49,6 +49,10 @@ export interface AdminMember {
 export interface AdminApprovalSettings {
   enterpriseId: string;
   defaultApproverMemberId: string;
+  orderReviewerMemberId?: string;
+  deliveryOwnerMemberId?: string;
+  paymentInvoiceOwnerMemberId?: string;
+  logisticsOwnerMemberId?: string;
   requireBuyerOrderApproval: boolean;
   requireQuoteOrderApproval: boolean;
   amountThresholdCents: number | null;

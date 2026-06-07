@@ -42,9 +42,11 @@ import {
   type OrderTimeFilter,
 } from '@/lib/order-filters';
 import { DEFAULT_ENTERPRISE_ID, useProcurementStore } from '@/lib/procurement-store';
+import { canHandleWorkflowRole, workflowOwnerName } from '@/lib/order-workflow';
 import { cn } from '@/lib/utils';
 import { PartClassBadge } from './part-class-badge';
 import { OrderTimeFilterControl } from './order-time-filter-control';
+import { ApprovalFlow, type ApprovalFlowStep } from './approval-flow';
 import type { AdminApprovalSettings, AdminMember, AdminPermission } from '@/types/admin';
 import type {
   CheckoutDraft,
@@ -133,6 +135,7 @@ export function AccountPanel() {
     deleteInvoiceProfile,
     approveLocalOrder,
     markLocalOrderPaid,
+    advanceLocalOrder,
     acceptLocalQuote,
     acceptOsHandoff,
     signOut,
@@ -179,6 +182,17 @@ export function AccountPanel() {
         ? members.find((member) => member.email === profile.email && member.status === 'active')
         : undefined,
     [isAuthenticated, members, profile.email],
+  );
+  const enterpriseMembers = useMemo(
+    () =>
+      members.filter(
+        (member) => (member.enterpriseId ?? DEFAULT_ENTERPRISE_ID) === profile.enterpriseId,
+      ),
+    [members, profile.enterpriseId],
+  );
+  const enterpriseApprovalSettings = useMemo(
+    () => approvalSettingsForEnterprise(approvalSettings, enterpriseMembers, profile.enterpriseId),
+    [approvalSettings, enterpriseMembers, profile.enterpriseId],
   );
   const statusFilters: Array<{ key: OrderStatusFilter; label: string }> = [
     { key: 'all', label: t('allOrders') },
@@ -231,9 +245,20 @@ export function AccountPanel() {
   const payableOrders = useMemo(
     () =>
       enterpriseOrders.filter(
-        (order) => profile.role !== 'engineer' && order.status === 'pending-payment',
+        (order) =>
+          order.status === 'pending-payment' &&
+          canHandleWorkflowRole(profile, enterpriseApprovalSettings, members, 'paymentInvoice'),
       ),
-    [enterpriseOrders, profile.role],
+    [enterpriseApprovalSettings, enterpriseOrders, members, profile],
+  );
+  const receivableOrders = useMemo(
+    () =>
+      enterpriseOrders.filter(
+        (order) =>
+          order.status === 'shipped' &&
+          canHandleWorkflowRole(profile, enterpriseApprovalSettings, members, 'logistics'),
+      ),
+    [enterpriseApprovalSettings, enterpriseOrders, members, profile],
   );
   const pendingHandoffs = useMemo(
     () => enterpriseOsHandoffs.filter((handoff) => handoff.status === 'pending'),
@@ -266,17 +291,6 @@ export function AccountPanel() {
         ]
       : []),
   ];
-  const enterpriseMembers = useMemo(
-    () =>
-      members.filter(
-        (member) => (member.enterpriseId ?? DEFAULT_ENTERPRISE_ID) === profile.enterpriseId,
-      ),
-    [members, profile.enterpriseId],
-  );
-  const enterpriseApprovalSettings = useMemo(
-    () => approvalSettingsForEnterprise(approvalSettings, enterpriseMembers, profile.enterpriseId),
-    [approvalSettings, enterpriseMembers, profile.enterpriseId],
-  );
   const accessLookupEmail = accessForm.email.trim().toLowerCase();
   const latestAccessRequest = useMemo(
     () =>
@@ -696,7 +710,9 @@ export function AccountPanel() {
                       </div>
                     )}
 
-                    {(actionableApprovalOrders.length > 0 || payableOrders.length > 0) && (
+                    {(actionableApprovalOrders.length > 0 ||
+                      payableOrders.length > 0 ||
+                      receivableOrders.length > 0) && (
                       <div className="bg-bg-surface flex flex-col gap-3 rounded-lg p-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="text-text-strong font-medium">{t('actionQueueTitle')}</p>
@@ -725,6 +741,18 @@ export function AccountPanel() {
                             >
                               <CircleDollarSign className="size-4" />
                               <span>{t('showPendingPayment', { count: payableOrders.length })}</span>
+                            </Button>
+                          )}
+                          {receivableOrders.length > 0 && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setStatusFilter('shipped')}
+                            >
+                              <ClipboardCheck className="size-4" />
+                              <span>
+                                {t('showPendingReceipt', { count: receivableOrders.length })}
+                              </span>
                             </Button>
                           )}
                         </div>
@@ -842,13 +870,27 @@ export function AccountPanel() {
                             canApprove={isAuthenticated && canApproveOrder(profile, order)}
                             canPay={
                               isAuthenticated &&
-                              profile.role !== 'engineer' &&
-                              order.status === 'pending-payment'
+                              order.status === 'pending-payment' &&
+                              canHandleWorkflowRole(
+                                profile,
+                                enterpriseApprovalSettings,
+                                members,
+                                'paymentInvoice',
+                              )
                             }
-                            canAdvance={false}
+                            canAdvance={
+                              isAuthenticated &&
+                              order.status === 'shipped' &&
+                              canHandleWorkflowRole(
+                                profile,
+                                enterpriseApprovalSettings,
+                                members,
+                                'logistics',
+                              )
+                            }
                             onApprove={() => approveLocalOrder(order.orderNo)}
                             onPay={() => markLocalOrderPaid(order.orderNo)}
-                            onAdvance={() => undefined}
+                            onAdvance={() => advanceLocalOrder(order.orderNo)}
                             detailHref={`/${locale}/orders/${encodeURIComponent(order.orderNo)}`}
                             labels={{
                               items: t('items'),
@@ -908,14 +950,33 @@ export function AccountPanel() {
                               note: t('orderNote'),
                               carrier: t('carrier'),
                               trackingNo: t('trackingNo'),
-                              progressSteps: {
-                                'pending-quote': t('orderStatus.pending-quote'),
-                                'pending-approval': t('orderStatus.pending-approval'),
-                                'pending-payment': t('orderStatus.pending-payment'),
-                                paid: t('orderStatus.paid'),
-                                'in-production': t('orderStatus.in-production'),
-                                shipped: t('orderStatus.shipped'),
-                                completed: t('orderStatus.completed'),
+                              approvalFlow: {
+                                title: t('approvalFlowTitle'),
+                                submitted: t('approvalFlowSubmitted'),
+                                quote: t('approvalFlowQuote'),
+                                delivery: t('approvalFlowDelivery'),
+                                approval: t('approvalFlowApproval'),
+                                payment: t('approvalFlowPayment'),
+                                fulfillment: t('approvalFlowFulfillment'),
+                                deliveryOwner: workflowOwnerName(
+                                  enterpriseApprovalSettings,
+                                  members,
+                                  'delivery',
+                                  t('approvalUnassigned'),
+                                ),
+                                paymentInvoiceOwner: workflowOwnerName(
+                                  enterpriseApprovalSettings,
+                                  members,
+                                  'paymentInvoice',
+                                  t('approvalUnassigned'),
+                                ),
+                                logisticsOwner: workflowOwnerName(
+                                  enterpriseApprovalSettings,
+                                  members,
+                                  'logistics',
+                                  t('approvalUnassigned'),
+                                ),
+                                skipped: t('approvalFlowSkipped'),
                               },
                               csvHeaders: {
                                 orderNo: t('csv.orderNo'),
@@ -1189,6 +1250,7 @@ function ApprovalSettingsPanel({
     members.find((member) => member.id === settings.defaultApproverMemberId) ??
     approverOptions[0] ??
     fallbackApprover;
+  const responsibilityOptions = members.filter((member) => member.status === 'active');
   const thresholdValue =
     settings.amountThresholdCents === null ? '' : String(settings.amountThresholdCents / 100);
 
@@ -1255,6 +1317,41 @@ function ApprovalSettingsPanel({
             </Field>
           </div>
 
+          <div className="border-divider mt-5 border-t pt-4">
+            <h3 className="text-text-strong font-semibold">{t('workflowSettingsTitle')}</h3>
+            <p className="text-text-muted mt-1 text-sm leading-relaxed">
+              {t('workflowSettingsHint')}
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <MemberSelectField
+                label={t('workflowReviewOwner')}
+                value={settings.orderReviewerMemberId}
+                members={responsibilityOptions}
+                onChange={(orderReviewerMemberId) => updateSettings({ orderReviewerMemberId })}
+              />
+              <MemberSelectField
+                label={t('workflowDeliveryOwner')}
+                value={settings.deliveryOwnerMemberId}
+                members={responsibilityOptions}
+                onChange={(deliveryOwnerMemberId) => updateSettings({ deliveryOwnerMemberId })}
+              />
+              <MemberSelectField
+                label={t('workflowPaymentInvoiceOwner')}
+                value={settings.paymentInvoiceOwnerMemberId}
+                members={responsibilityOptions}
+                onChange={(paymentInvoiceOwnerMemberId) =>
+                  updateSettings({ paymentInvoiceOwnerMemberId })
+                }
+              />
+              <MemberSelectField
+                label={t('workflowLogisticsOwner')}
+                value={settings.logisticsOwnerMemberId}
+                members={responsibilityOptions}
+                onChange={(logisticsOwnerMemberId) => updateSettings({ logisticsOwnerMemberId })}
+              />
+            </div>
+          </div>
+
           <div className="mt-4 grid gap-3">
             <ApprovalToggle
               checked={settings.requireBuyerOrderApproval}
@@ -1278,6 +1375,31 @@ function ApprovalSettingsPanel({
         <div className="bg-bg-surface rounded-lg p-4">
           <h3 className="text-text-strong font-semibold">{t('approvalRuleTitle')}</h3>
           <div className="text-text-muted mt-3 space-y-2 text-sm">
+            <p>
+              {t('workflowRuleReview', {
+                name: workflowOwnerName(settings, members, 'review', t('approvalUnassigned')),
+              })}
+            </p>
+            <p>
+              {t('workflowRuleDelivery', {
+                name: workflowOwnerName(settings, members, 'delivery', t('approvalUnassigned')),
+              })}
+            </p>
+            <p>
+              {t('workflowRulePaymentInvoice', {
+                name: workflowOwnerName(
+                  settings,
+                  members,
+                  'paymentInvoice',
+                  t('approvalUnassigned'),
+                ),
+              })}
+            </p>
+            <p>
+              {t('workflowRuleLogistics', {
+                name: workflowOwnerName(settings, members, 'logistics', t('approvalUnassigned')),
+              })}
+            </p>
             <p>
               {t('approvalRuleApprover', {
                 name: selectedApprover?.name ?? t('approvalUnassigned'),
@@ -1308,6 +1430,36 @@ function ApprovalSettingsPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+function MemberSelectField({
+  label,
+  value,
+  members,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  members: AdminMember[];
+  onChange: (memberId: string) => void;
+}) {
+  return (
+    <Field label={label}>
+      <Select value={value ?? ''} onValueChange={onChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {members.map((member) => (
+            <SelectItem key={member.id} value={member.id}>
+              {member.name}
+              {member.roleName ? ` · ${member.roleName}` : ''}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
   );
 }
 
@@ -1684,7 +1836,19 @@ export function OrderRow({
     note: string;
     carrier: string;
     trackingNo: string;
-    progressSteps: Record<OrderStatus, string>;
+    approvalFlow: {
+      title: string;
+      submitted: string;
+      quote: string;
+      delivery: string;
+      approval: string;
+      payment: string;
+      fulfillment: string;
+      deliveryOwner: string;
+      paymentInvoiceOwner: string;
+      logisticsOwner: string;
+      skipped: string;
+    };
     csvHeaders: {
       orderNo: string;
       project: string;
@@ -1716,6 +1880,7 @@ export function OrderRow({
   const orderSourceLabel = isOsOrder
     ? `${labels.orderSource}: ${labels.sourceOs}`
     : `${labels.orderSource}: ${labels.sourceWeb}`;
+  const approvalFlowSteps = orderApprovalFlowSteps(order, locale, labels.approvalFlow);
 
   function handleDownloadBom() {
     if (!order.lines?.length) return;
@@ -1771,45 +1936,45 @@ export function OrderRow({
   return (
     <article className="bg-bg-surface rounded-lg p-2.5 md:p-3">
       {!detailOnly && (
-        <div className="flex flex-col gap-2.5 md:gap-3 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-text-strong text-base font-semibold md:text-lg">
-                {order.orderNo}
-              </p>
-              <Badge variant={statusVariant(order.status)}>
-                <StatusIcon className="size-3.5" />
-                {statusLabel}
-              </Badge>
+        <>
+          <div className="flex flex-col gap-2.5 md:gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-text-strong text-base font-semibold md:text-lg">
+                  {order.orderNo}
+                </p>
+                <Badge variant={statusVariant(order.status)}>
+                  <StatusIcon className="size-3.5" />
+                  {statusLabel}
+                </Badge>
+              </div>
+              <p className="text-text mt-1 text-base font-medium">{order.projectName}</p>
+              <div className="text-text-muted mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-sm md:gap-x-4">
+                <span>{submittedAtLabel}</span>
+                <span>{labels.submittedBy}</span>
+                <span>{orderSourceLabel}</span>
+              </div>
             </div>
-            <p className="text-text mt-1 text-base font-medium">
-              {order.projectName}
-            </p>
-            <div className="text-text-muted mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-sm md:gap-x-4">
-              <span>{submittedAtLabel}</span>
-              <span>{labels.submittedBy}</span>
-              <span>{orderSourceLabel}</span>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_1fr_auto] xl:min-w-[400px]">
-            <div>
-              <p className="text-text-muted text-xs">{labels.items}</p>
-              <p className="text-text-strong mt-1 text-base font-medium">{order.itemCount}</p>
-            </div>
-            <div>
-              <p className="text-text-muted text-xs">{labels.payment}</p>
-              <p className="text-text-strong mt-1 text-base font-medium tabular-nums">
-                {formatPrice(order.subtotalCents, 'CNY', locale === 'zh' ? 'zh-CN' : 'en-US')}
-              </p>
-            </div>
-            <div className="col-span-2 sm:col-span-1 sm:text-right">
-              <p className="text-text-muted text-xs">{labels.approval}</p>
-              <p className="text-text-muted mt-1 text-sm">{latestEvent(order, locale)}</p>
-              <p className="text-text-strong mt-1 text-sm">{labels.approvalOwner}</p>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_1fr_auto] xl:min-w-[400px]">
+              <div>
+                <p className="text-text-muted text-xs">{labels.items}</p>
+                <p className="text-text-strong mt-1 text-base font-medium">{order.itemCount}</p>
+              </div>
+              <div>
+                <p className="text-text-muted text-xs">{labels.payment}</p>
+                <p className="text-text-strong mt-1 text-base font-medium tabular-nums">
+                  {formatPrice(order.subtotalCents, 'CNY', locale === 'zh' ? 'zh-CN' : 'en-US')}
+                </p>
+              </div>
+              <div className="col-span-2 sm:col-span-1 sm:text-right">
+                <p className="text-text-muted text-xs">{labels.approval}</p>
+                <p className="text-text-muted mt-1 text-sm">{latestEvent(order, locale)}</p>
+                <p className="text-text-strong mt-1 text-sm">{labels.approvalOwner}</p>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {(!detailOnly || !showDetails) && (
@@ -1823,13 +1988,15 @@ export function OrderRow({
       {showDetails && (
         <>
           {detailOnly ? (
-            <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)] md:items-center">
+            <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
               <div className="flex flex-wrap items-center gap-1.5 md:gap-2">{actionControls}</div>
-              <OrderProgress status={order.status} labels={labels.progressSteps} className="mt-0" />
             </div>
-          ) : (
-            <OrderProgress status={order.status} labels={labels.progressSteps} />
-          )}
+          ) : null}
+          <ApprovalFlow
+            title={labels.approvalFlow.title}
+            steps={approvalFlowSteps}
+            className="border-divider mt-3 border-t pt-3"
+          />
 
           <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
             <div className="bg-bg-elevated rounded-md p-3">
@@ -2118,43 +2285,104 @@ function QuoteRequestRow({
   );
 }
 
-function OrderProgress({
-  status,
-  labels,
-  className,
-}: {
-  status: OrderStatus;
-  labels: Record<OrderStatus, string>;
-  className?: string;
-}) {
-  const steps: OrderStatus[] = [
-    status === 'pending-quote' ? 'pending-quote' : 'pending-approval',
+function orderApprovalFlowSteps(
+  order: LocalOrderSnapshot,
+  locale: string,
+  labels: {
+    submitted: string;
+    quote: string;
+    delivery: string;
+    approval: string;
+    payment: string;
+    fulfillment: string;
+    deliveryOwner: string;
+    paymentInvoiceOwner: string;
+    logisticsOwner: string;
+    skipped: string;
+  },
+): ApprovalFlowStep[] {
+  const statusOrder: OrderStatus[] = [
+    'pending-quote',
+    'pending-approval',
     'pending-payment',
     'paid',
     'in-production',
     'shipped',
     'completed',
   ];
-  const currentIndex = steps.indexOf(status);
+  const statusIndex = statusOrder.indexOf(order.status);
+  const approvalRequired =
+    order.approvalMode !== 'not-required' && order.approvalMode !== 'admin-direct';
+  const paymentDone = ['paid', 'in-production', 'shipped', 'completed'].includes(order.status);
+  const fulfillmentDone = order.status === 'completed';
+  const fulfillmentCurrent = ['paid', 'in-production', 'shipped'].includes(order.status);
+  const approvalMeta = order.approvedBy
+    ? `${order.approvedBy} · ${formatDate(order.approvedAt ?? order.updatedAt ?? order.submittedAt, locale)}`
+    : order.approver
+      ? order.approver
+      : approvalRequired
+        ? undefined
+        : labels.skipped;
+  const steps: ApprovalFlowStep[] = [
+    {
+      key: 'submitted',
+      title: labels.submitted,
+      meta: `${order.submittedBy ?? order.role} · ${formatDate(order.submittedAt, locale)}`,
+      status: 'done',
+    },
+  ];
 
-  return (
-    <div className={cn('mt-4 grid grid-cols-3 gap-1.5 sm:grid-cols-6 sm:gap-2', className)}>
-      {steps.map((step, index) => {
-        const active = index <= currentIndex;
-        return (
-          <div
-            key={step}
-            className={`flex min-h-[36px] items-center rounded-sm px-2 py-1.5 text-xs transition-colors sm:py-2 ${
-              active ? 'bg-brand-soft text-brand-500' : 'bg-bg-control text-text-muted'
-            }`}
-          >
-            <span className="tabular-nums">{index + 1}</span>
-            <span className="ml-1">{labels[step]}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
+  if (order.status === 'pending-quote') {
+    steps.push({
+      key: 'quote',
+      title: labels.quote,
+      status: 'current',
+    });
+  }
+
+  steps.push({
+    key: 'delivery',
+    title: labels.delivery,
+    meta: order.shippingAddress?.recipient ?? labels.deliveryOwner,
+    status: order.shippingAddress ? 'done' : 'pending',
+  });
+
+  steps.push({
+    key: 'approval',
+    title: labels.approval,
+    meta: approvalMeta,
+    status: approvalRequired
+      ? order.status === 'pending-approval'
+        ? 'current'
+        : statusIndex > statusOrder.indexOf('pending-approval')
+          ? 'done'
+          : 'pending'
+      : 'skipped',
+  });
+
+  steps.push({
+    key: 'payment',
+    title: labels.payment,
+    meta: order.paidBy
+      ? `${order.paidBy} · ${formatDate(order.paidAt ?? order.updatedAt ?? order.submittedAt, locale)}`
+      : labels.paymentInvoiceOwner,
+    status: order.status === 'pending-payment' ? 'current' : paymentDone ? 'done' : 'pending',
+  });
+
+  steps.push({
+    key: 'fulfillment',
+    title: labels.fulfillment,
+    meta:
+      order.completedAt || order.shippedAt || order.productionStartedAt
+        ? formatDate(
+            order.completedAt ?? order.shippedAt ?? order.productionStartedAt ?? order.submittedAt,
+            locale,
+          )
+        : labels.logisticsOwner,
+    status: fulfillmentDone ? 'done' : fulfillmentCurrent ? 'current' : 'pending',
+  });
+
+  return steps;
 }
 
 function Field({

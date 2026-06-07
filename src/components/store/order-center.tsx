@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
+import { approvalSettingsForEnterprise, useAdminStore } from '@/lib/admin-store';
 import {
   Select,
   SelectContent,
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { DEFAULT_ENTERPRISE_ID, useProcurementStore } from '@/lib/procurement-store';
 import { formatPrice } from '@/lib/format';
+import { canHandleWorkflowRole, workflowOwnerName } from '@/lib/order-workflow';
 import {
   matchesOrderTimeFilter,
   type OrderDateRange,
@@ -67,8 +69,10 @@ export function OrderCenter() {
   const [customTimeRange, setCustomTimeRange] = useState<OrderDateRange>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleOrderCount, setVisibleOrderCount] = useState(ORDER_PAGE_SIZE);
-  const { isAuthenticated, profile, orders, approveLocalOrder, markLocalOrderPaid } =
+  const { isAuthenticated, profile, orders, approveLocalOrder, markLocalOrderPaid, advanceLocalOrder } =
     useProcurementStore();
+  const adminMembers = useAdminStore((state) => state.members);
+  const approvalSettings = useAdminStore((state) => state.approvalSettings);
   const enterpriseOrders = useMemo(
     () =>
       isAuthenticated
@@ -98,6 +102,17 @@ export function OrderCenter() {
     { key: '30d', label: tAccount('last30Days') },
     { key: 'month', label: tAccount('thisMonth') },
   ];
+  const enterpriseMembers = useMemo(
+    () =>
+      adminMembers.filter(
+        (member) => (member.enterpriseId ?? DEFAULT_ENTERPRISE_ID) === profile.enterpriseId,
+      ),
+    [adminMembers, profile.enterpriseId],
+  );
+  const enterpriseApprovalSettings = useMemo(
+    () => approvalSettingsForEnterprise(approvalSettings, enterpriseMembers, profile.enterpriseId),
+    [approvalSettings, enterpriseMembers, profile.enterpriseId],
+  );
   const filteredOrders = useMemo(
     () =>
       enterpriseOrders.filter((order) => {
@@ -122,9 +137,20 @@ export function OrderCenter() {
   const payableOrders = useMemo(
     () =>
       enterpriseOrders.filter(
-        (order) => profile.role !== 'engineer' && order.status === 'pending-payment',
+        (order) =>
+          order.status === 'pending-payment' &&
+          canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'paymentInvoice'),
       ),
-    [enterpriseOrders, profile.role],
+    [adminMembers, enterpriseApprovalSettings, enterpriseOrders, profile],
+  );
+  const receivableOrders = useMemo(
+    () =>
+      enterpriseOrders.filter(
+        (order) =>
+          order.status === 'shipped' &&
+          canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'logistics'),
+      ),
+    [adminMembers, enterpriseApprovalSettings, enterpriseOrders, profile],
   );
 
   useEffect(() => {
@@ -226,7 +252,9 @@ export function OrderCenter() {
           </div>
         ) : (
           <div className="mt-2.5 space-y-2.5 md:mt-4 md:space-y-3">
-            {(actionableApprovalOrders.length > 0 || payableOrders.length > 0) && (
+            {(actionableApprovalOrders.length > 0 ||
+              payableOrders.length > 0 ||
+              receivableOrders.length > 0) && (
               <div className="bg-bg-surface flex flex-wrap items-center justify-between gap-2 rounded-lg p-2.5">
                 <div>
                   <p className="text-text-strong font-medium">{tAccount('actionQueueTitle')}</p>
@@ -259,6 +287,19 @@ export function OrderCenter() {
                     >
                       <CircleDollarSign className="size-4" />
                       <span>{tAccount('showPendingPayment', { count: payableOrders.length })}</span>
+                    </Button>
+                  )}
+                  {receivableOrders.length > 0 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-[36px] px-3"
+                      onClick={() => setStatusFilter('shipped')}
+                    >
+                      <ClipboardCheck className="size-4" />
+                      <span>
+                        {tAccount('showPendingReceipt', { count: receivableOrders.length })}
+                      </span>
                     </Button>
                   )}
                 </div>
@@ -378,13 +419,27 @@ export function OrderCenter() {
                     canApprove={isAuthenticated && canApproveOrder(profile, order)}
                     canPay={
                       isAuthenticated &&
-                      profile.role !== 'engineer' &&
-                      order.status === 'pending-payment'
+                      order.status === 'pending-payment' &&
+                      canHandleWorkflowRole(
+                        profile,
+                        enterpriseApprovalSettings,
+                        adminMembers,
+                        'paymentInvoice',
+                      )
                     }
-                    canAdvance={false}
+                    canAdvance={
+                      isAuthenticated &&
+                      order.status === 'shipped' &&
+                      canHandleWorkflowRole(
+                        profile,
+                        enterpriseApprovalSettings,
+                        adminMembers,
+                        'logistics',
+                      )
+                    }
                     onApprove={() => approveLocalOrder(order.orderNo)}
                     onPay={() => markLocalOrderPaid(order.orderNo)}
-                    onAdvance={() => undefined}
+                    onAdvance={() => advanceLocalOrder(order.orderNo)}
                     detailHref={`/${locale}/orders/${encodeURIComponent(order.orderNo)}`}
                     labels={{
                       items: tAccount('items'),
@@ -444,14 +499,33 @@ export function OrderCenter() {
                       note: tAccount('orderNote'),
                       carrier: tAccount('carrier'),
                       trackingNo: tAccount('trackingNo'),
-                      progressSteps: {
-                        'pending-quote': tAccount('orderStatus.pending-quote'),
-                        'pending-approval': tAccount('orderStatus.pending-approval'),
-                        'pending-payment': tAccount('orderStatus.pending-payment'),
-                        paid: tAccount('orderStatus.paid'),
-                        'in-production': tAccount('orderStatus.in-production'),
-                        shipped: tAccount('orderStatus.shipped'),
-                        completed: tAccount('orderStatus.completed'),
+                      approvalFlow: {
+                        title: tAccount('approvalFlowTitle'),
+                        submitted: tAccount('approvalFlowSubmitted'),
+                        quote: tAccount('approvalFlowQuote'),
+                        delivery: tAccount('approvalFlowDelivery'),
+                        approval: tAccount('approvalFlowApproval'),
+                        payment: tAccount('approvalFlowPayment'),
+                        fulfillment: tAccount('approvalFlowFulfillment'),
+                        deliveryOwner: workflowOwnerName(
+                          enterpriseApprovalSettings,
+                          adminMembers,
+                          'delivery',
+                          tAccount('approvalUnassigned'),
+                        ),
+                        paymentInvoiceOwner: workflowOwnerName(
+                          enterpriseApprovalSettings,
+                          adminMembers,
+                          'paymentInvoice',
+                          tAccount('approvalUnassigned'),
+                        ),
+                        logisticsOwner: workflowOwnerName(
+                          enterpriseApprovalSettings,
+                          adminMembers,
+                          'logistics',
+                          tAccount('approvalUnassigned'),
+                        ),
+                        skipped: tAccount('approvalFlowSkipped'),
                       },
                       csvHeaders: {
                         orderNo: tAccount('csv.orderNo'),
