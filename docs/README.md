@@ -17,6 +17,8 @@ This directory separates source requirements, research evidence, design rules, i
 ## Source Of Truth
 
 - Product scope: `product/PRD.md`
+- Mini-program landing plan: `product/mini-program-landing-plan.md`
+- Mini-program API contract: `product/mini-program-api-contract.md`
 - Design source: `design/store-design-system.html`
 - Implemented token mapping: `design/DESIGN-TOKENS.md`
 - Header/footer measurements: `design/header-footer-spec.md`

@@ -12,6 +12,9 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json,md}\"",
+    "mini:dev": "pnpm --filter @hitbot/domain build && pnpm --filter @hitbot/api-client build && pnpm --filter @hitbot/wechat-miniprogram dev:weapp",
+    "mini:build": "pnpm --filter @hitbot/domain build && pnpm --filter @hitbot/api-client build && pnpm --filter @hitbot/wechat-miniprogram build:weapp",
+    "mini:typecheck": "pnpm --filter @hitbot/domain build && pnpm --filter @hitbot/api-client build && pnpm --filter @hitbot/domain typecheck && pnpm --filter @hitbot/api-client typecheck && pnpm --filter @hitbot/wechat-miniprogram typecheck",
     "ui:add": "shadcn add"
   },
   "dependencies": {

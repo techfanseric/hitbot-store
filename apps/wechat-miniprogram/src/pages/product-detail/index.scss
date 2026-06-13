@@ -1,0 +1,124 @@
+.detail-page {
+  .detail-visual {
+    display: flex;
+    min-height: 220px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    color: #1a1a1a;
+    background: #ffffff;
+    font-size: 24px;
+    font-weight: 900;
+  }
+
+  .detail-image {
+    width: 84%;
+    height: 196px;
+  }
+
+  .detail-main,
+  .specs,
+  .related {
+    margin-bottom: 10px;
+    padding: 14px;
+  }
+
+  .model {
+    display: block;
+    overflow: hidden;
+    color: #777777;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .title {
+    display: block;
+    margin-top: 4px;
+    font-size: 23px;
+    font-weight: 900;
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .price {
+    display: block;
+    margin-top: 8px;
+    color: #1a1a1a;
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1.15;
+  }
+
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .description {
+    display: block;
+    margin-top: 12px;
+    color: #555555;
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+
+  .section-title {
+    display: block;
+    color: #1a1a1a;
+    font-size: 17px;
+    font-weight: 800;
+  }
+
+  .spec-row,
+  .related-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(88px, auto);
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    margin-top: 8px;
+    padding: 10px 0;
+    box-shadow: inset 0 -1px #f0f0f1;
+  }
+
+  .spec-key,
+  .related-model {
+    overflow: hidden;
+    color: #777777;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .spec-value,
+  .related-price {
+    color: #1a1a1a;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .related-name {
+    display: block;
+    overflow: hidden;
+    margin-top: 3px;
+    color: #1a1a1a;
+    font-size: 14px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.empty-detail {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}

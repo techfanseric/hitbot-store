@@ -1,0 +1,14 @@
+{
+  "appid": "touristappid",
+  "projectname": "hitbot-store-miniprogram",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  },
+  "compileType": "miniprogram",
+  "srcMiniprogramRoot": "dist/",
+  "miniprogramRoot": "dist/"
+}

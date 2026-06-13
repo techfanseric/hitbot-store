@@ -1,0 +1,140 @@
+.order-detail-page {
+  .status-card,
+  .section {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 10px;
+    padding: 14px;
+  }
+
+  .section-title {
+    color: #1a1a1a;
+    font-size: 16px;
+    font-weight: 800;
+  }
+
+  .status-text {
+    display: block;
+    margin-top: 6px;
+    color: #bd1c22;
+    font-size: 24px;
+    font-weight: 900;
+  }
+
+  .timeline {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    color: #777777;
+    font-size: 11px;
+  }
+
+  .timeline-step {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: #d5d5d5;
+  }
+
+  .dot.active {
+    background: #bd1c22;
+  }
+
+  .text-button {
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 999px;
+    color: #bd1c22;
+    background: rgba(189, 28, 34, 0.1);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .line-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 84px;
+    gap: 10px;
+    padding: 10px 0;
+    box-shadow: inset 0 -1px #f0f0f1;
+  }
+
+  .line-model {
+    display: block;
+    color: #777777;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .line-name {
+    display: block;
+    overflow: hidden;
+    margin-top: 4px;
+    color: #1a1a1a;
+    font-size: 14px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .line-meta,
+  .info-line {
+    display: block;
+    margin-top: 5px;
+    color: #777777;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .info-line {
+    word-break: break-word;
+  }
+
+  .event-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .event-row {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 10px;
+    min-height: 32px;
+    align-items: center;
+  }
+
+  .event-label {
+    color: #777777;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .event-value {
+    color: #1a1a1a;
+    font-size: 13px;
+    font-weight: 800;
+    text-align: right;
+  }
+
+  .line-amount {
+    display: grid;
+    gap: 5px;
+    justify-items: end;
+    align-content: center;
+    color: #1a1a1a;
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .empty-detail {
+    display: grid;
+    gap: 18px;
+    padding: 20px;
+  }
+}

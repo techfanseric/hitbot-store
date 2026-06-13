@@ -17,6 +17,9 @@ node_modules/
 
 # production
 /build
+apps/*/dist/
+apps/*/.swc/
+packages/*/dist/
 
 # misc
 .DS_Store
