@@ -27,6 +27,7 @@ const dofOptions = [4, 6];
 
 export default function ProductsPage() {
   const appState = useMiniStore();
+  const navMetrics = useMemo(() => getProductsNavMetrics(), []);
   const [activeCategory, setActiveCategory] = useState<ActiveCategory>('all');
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -134,14 +135,16 @@ export default function ProductsPage() {
   }
 
   return (
-    <View className="page products-page">
-      <View className="search-shell">
-        <Input
-          value={keyword}
-          placeholder="搜索型号 / 品类 / 名称"
-          confirmType="search"
-          onInput={(event) => setKeyword(String(event.detail.value))}
-        />
+    <View className="page products-page" style={navMetrics.cssVars}>
+      <View className="products-search-nav">
+        <View className="search-shell">
+          <Input
+            value={keyword}
+            placeholder="搜索型号 / 品类 / 名称"
+            confirmType="search"
+            onInput={(event) => setKeyword(String(event.detail.value))}
+          />
+        </View>
       </View>
 
       <ScrollView className="category-strip" scrollX enhanced showScrollbar={false}>
@@ -318,6 +321,41 @@ export default function ProductsPage() {
       </View>
     </View>
   );
+}
+
+function getProductsNavMetrics() {
+  const fallback = {
+    capsuleTop: 54,
+    capsuleHeight: 32,
+    capsuleLeft: 288,
+    navHeight: 98,
+  };
+
+  try {
+    const capsule = Taro.getMenuButtonBoundingClientRect();
+    const capsuleTop = capsule.top || fallback.capsuleTop;
+    const capsuleHeight = capsule.height || fallback.capsuleHeight;
+    const capsuleLeft = capsule.left || fallback.capsuleLeft;
+    const navHeight = capsuleTop + capsuleHeight + 12;
+
+    return {
+      cssVars: [
+        `--products-capsule-top:${capsuleTop}px`,
+        `--products-capsule-height:${capsuleHeight}px`,
+        `--products-capsule-left:${capsuleLeft}px`,
+        `--products-nav-height:${navHeight}px`,
+      ].join(';'),
+    };
+  } catch {
+    return {
+      cssVars: [
+        `--products-capsule-top:${fallback.capsuleTop}px`,
+        `--products-capsule-height:${fallback.capsuleHeight}px`,
+        `--products-capsule-left:${fallback.capsuleLeft}px`,
+        `--products-nav-height:${fallback.navHeight}px`,
+      ].join(';'),
+    };
+  }
 }
 
 function FilterGroup({ title, children }: { title: string; children: ReactNode }) {

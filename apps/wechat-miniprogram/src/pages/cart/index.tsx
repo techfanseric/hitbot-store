@@ -25,6 +25,7 @@ type CheckoutStep = 1 | 2 | 3;
 
 export default function CartPage() {
   const appState = useMiniStore();
+  const navMetrics = useMemo(() => getCartNavMetrics(), []);
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('corporate');
@@ -119,11 +120,26 @@ export default function CartPage() {
   }
 
   return (
-    <View className="page cart-page">
+    <View className="page cart-page" style={navMetrics.cssVars}>
+      <View className="cart-progress-nav">
+        <View className="cart-progress">
+          {[
+            { step: 1, label: '物料' },
+            { step: 2, label: '收货' },
+            { step: 3, label: '付款' },
+          ].map((item) => (
+            <View key={item.step} className={currentStep === item.step ? 'step-item active' : 'step-item'}>
+              <Text className="step-dot">{item.step}</Text>
+              <Text>{item.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
       <View className="surface project-card">
         <View className="between">
-          <View>
-            <Text className="project-label">当前项目</Text>
+          <View className="project-line">
+            <Text className="project-label">当前项目：</Text>
             <Text className="project-name">{project.projectName}</Text>
           </View>
           <Text className={project.source === 'os' ? 'tag tag-red' : 'tag'}>
@@ -144,19 +160,6 @@ export default function CartPage() {
             商城购物车
           </Button>
         </View>
-      </View>
-
-      <View className="surface step-card">
-        {[
-          { step: 1, label: '物料' },
-          { step: 2, label: '收货' },
-          { step: 3, label: '付款' },
-        ].map((item) => (
-          <View key={item.step} className={currentStep === item.step ? 'step-item active' : 'step-item'}>
-            <Text className="step-dot">{item.step}</Text>
-            <Text>{item.label}</Text>
-          </View>
-        ))}
       </View>
 
       {currentStep === 1 && (
@@ -391,4 +394,39 @@ export default function CartPage() {
       </View>
     </View>
   );
+}
+
+function getCartNavMetrics() {
+  const fallback = {
+    capsuleTop: 54,
+    capsuleHeight: 32,
+    capsuleLeft: 288,
+    navHeight: 98,
+  };
+
+  try {
+    const capsule = Taro.getMenuButtonBoundingClientRect();
+    const capsuleTop = capsule.top || fallback.capsuleTop;
+    const capsuleHeight = capsule.height || fallback.capsuleHeight;
+    const capsuleLeft = capsule.left || fallback.capsuleLeft;
+    const navHeight = capsuleTop + capsuleHeight + 12;
+
+    return {
+      cssVars: [
+        `--cart-capsule-top:${capsuleTop}px`,
+        `--cart-capsule-height:${capsuleHeight}px`,
+        `--cart-capsule-left:${capsuleLeft}px`,
+        `--cart-nav-height:${navHeight}px`,
+      ].join(';'),
+    };
+  } catch {
+    return {
+      cssVars: [
+        `--cart-capsule-top:${fallback.capsuleTop}px`,
+        `--cart-capsule-height:${fallback.capsuleHeight}px`,
+        `--cart-capsule-left:${fallback.capsuleLeft}px`,
+        `--cart-nav-height:${fallback.navHeight}px`,
+      ].join(';'),
+    };
+  }
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Taro from '@tarojs/taro';
 import { Button, Input, Text, View } from '@tarojs/components';
 import { defaultProfile } from '@hitbot/domain';
@@ -9,6 +9,7 @@ import './index.scss';
 export default function AccountPage() {
   const appState = useMiniStore();
   const profile = appState.session?.profile ?? defaultProfile;
+  const navMetrics = useMemo(() => getAccountNavMetrics(), []);
   const [phone, setPhone] = useState(profile.phone);
   const [inviteCode, setInviteCode] = useState('');
   const [binding, setBinding] = useState(false);
@@ -34,19 +35,22 @@ export default function AccountPage() {
   }
 
   return (
-    <View className="page account-page">
+    <View className="page account-page" style={navMetrics.cssVars}>
+      <View className="account-title-nav">
+        <Text className="nav-company">{profile.companyName}</Text>
+      </View>
+
       <View className="surface profile-card">
         <View className="avatar">
           <Text>H</Text>
         </View>
         <View className="profile-main">
           <View className="profile-head">
-            <Text className="company">{profile.companyName}</Text>
+            <Text className="person">{profile.contactName} · {roleLabel(profile.role)}</Text>
             <Text className={appState.session?.bound ? 'status-badge bound' : 'status-badge'}>
               {appState.session?.bound ? '已绑定' : '待绑定'}
             </Text>
           </View>
-          <Text className="person">{profile.contactName} · {roleLabel(profile.role)}</Text>
           <Text className="hint">{profile.email}</Text>
         </View>
         <View className="profile-stats">
@@ -132,6 +136,41 @@ export default function AccountPage() {
       </View>
     </View>
   );
+}
+
+function getAccountNavMetrics() {
+  const fallback = {
+    capsuleTop: 54,
+    capsuleHeight: 32,
+    capsuleLeft: 288,
+    navHeight: 98,
+  };
+
+  try {
+    const capsule = Taro.getMenuButtonBoundingClientRect();
+    const capsuleTop = capsule.top || fallback.capsuleTop;
+    const capsuleHeight = capsule.height || fallback.capsuleHeight;
+    const capsuleLeft = capsule.left || fallback.capsuleLeft;
+    const navHeight = capsuleTop + capsuleHeight + 12;
+
+    return {
+      cssVars: [
+        `--account-capsule-top:${capsuleTop}px`,
+        `--account-capsule-height:${capsuleHeight}px`,
+        `--account-capsule-left:${capsuleLeft}px`,
+        `--account-nav-height:${navHeight}px`,
+      ].join(';'),
+    };
+  } catch {
+    return {
+      cssVars: [
+        `--account-capsule-top:${fallback.capsuleTop}px`,
+        `--account-capsule-height:${fallback.capsuleHeight}px`,
+        `--account-capsule-left:${fallback.capsuleLeft}px`,
+        `--account-nav-height:${fallback.navHeight}px`,
+      ].join(';'),
+    };
+  }
 }
 
 function Metric({ value, label }: { value: string; label: string }) {

@@ -1,4 +1,37 @@
 .account-page {
+  padding-top: calc(var(--account-nav-height, 98px) + 12px);
+
+  .account-title-nav {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 30;
+    display: flex;
+    min-height: var(--account-nav-height, 98px);
+    align-items: flex-start;
+    padding:
+      var(--account-capsule-top, 54px)
+      14px
+      12px;
+    background: #ffffff;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+  }
+
+  .nav-company {
+    display: block;
+    overflow: hidden;
+    width: calc(var(--account-capsule-left, 288px) - 28px);
+    max-width: 260px;
+    height: var(--account-capsule-height, 32px);
+    color: #1a1a1a;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: var(--account-capsule-height, 32px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .profile-card {
     display: grid;
     grid-template-columns: 48px minmax(0, 1fr);
@@ -28,7 +61,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
-    align-items: start;
+    align-items: center;
   }
 
   .company {
@@ -59,7 +92,6 @@
 
   .person {
     display: block;
-    margin-top: 5px;
     color: #555555;
     font-size: 13px;
     font-weight: 800;

@@ -42,6 +42,7 @@ const ORDER_PAGE_SIZE = 8;
 
 export default function OrdersPage() {
   const appState = useMiniStore();
+  const navMetrics = useMemo(() => getNavMetrics(), []);
   const [filter, setFilter] = useState<QueueFilter>('todo');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState('all');
@@ -64,6 +65,16 @@ export default function OrdersPage() {
         return queueMatch && statusMatch && projectMatch && timeMatch;
       }),
     [filter, orders, projectFilter, statusFilter, timeFilter],
+  );
+  const allQueueCount = useMemo(
+    () =>
+      orders.filter((order) => {
+        const statusMatch = statusFilter === 'all' || order.status === statusFilter;
+        const projectMatch = projectFilter === 'all' || order.projectName === projectFilter;
+        const timeMatch = matchesTimeFilter(order.submittedAt, timeFilter);
+        return statusMatch && projectMatch && timeMatch;
+      }).length,
+    [orders, projectFilter, statusFilter, timeFilter],
   );
   const visibleOrders = useMemo(
     () => filteredOrders.slice(0, visibleCount),
@@ -131,25 +142,28 @@ export default function OrdersPage() {
   }
 
   return (
-    <View className="page orders-page">
+    <View className="page orders-page" style={navMetrics.cssVars}>
       <View className="summary-strip">
         <View className="summary-copy">
-          <Text className="summary-primary">{filteredOrders.length} 个订单</Text>
+          <Text className="summary-primary">订单中心</Text>
           <Text className="summary-secondary">
             待审批 {pendingApproval} · 待付款 {pendingPayment} · 待报价 {pendingQuote}
           </Text>
         </View>
-        <Button className="filter-trigger" onClick={() => setFiltersOpen((value) => !value)}>
-          {filtersOpen ? '收起筛选' : '筛选'}
-        </Button>
       </View>
 
-      <View className="filter-tabs">
-        <Button className={filter === 'todo' ? 'tab active' : 'tab'} onClick={() => updateQueueFilter('todo')}>
-          只看待办
-        </Button>
-        <Button className={filter === 'all' ? 'tab active' : 'tab'} onClick={() => updateQueueFilter('all')}>
-          全部订单
+      <View className="list-controls">
+        <View className="filter-tabs">
+          <Button className={filter === 'todo' ? 'tab active' : 'tab'} onClick={() => updateQueueFilter('todo')}>
+            只看待办
+          </Button>
+          <Button className={filter === 'all' ? 'tab active' : 'tab'} onClick={() => updateQueueFilter('all')}>
+            <Text>全部订单</Text>
+            <Text className="tab-count">{allQueueCount}</Text>
+          </Button>
+        </View>
+        <Button className="filter-trigger" onClick={() => setFiltersOpen((value) => !value)}>
+          {filtersOpen ? '收起' : '筛选'}
         </Button>
       </View>
 
@@ -320,4 +334,44 @@ function matchesTimeFilter(value: string, filter: TimeFilter) {
 
   const days = filter === '7d' ? 7 : 30;
   return now.getTime() - date.getTime() <= days * 24 * 60 * 60 * 1000;
+}
+
+function getNavMetrics() {
+  const fallback = {
+    statusBarHeight: 44,
+    capsuleTop: 54,
+    capsuleHeight: 32,
+    capsuleLeft: 288,
+    navHeight: 98,
+  };
+
+  try {
+    const systemInfo = Taro.getSystemInfoSync();
+    const capsule = Taro.getMenuButtonBoundingClientRect();
+    const statusBarHeight = systemInfo.statusBarHeight || fallback.statusBarHeight;
+    const capsuleTop = capsule.top || fallback.capsuleTop;
+    const capsuleHeight = capsule.height || fallback.capsuleHeight;
+    const capsuleLeft = capsule.left || fallback.capsuleLeft;
+    const navHeight = capsuleTop + capsuleHeight + 12;
+
+    return {
+      cssVars: [
+        `--orders-status-top:${statusBarHeight}px`,
+        `--orders-capsule-top:${capsuleTop}px`,
+        `--orders-capsule-height:${capsuleHeight}px`,
+        `--orders-capsule-left:${capsuleLeft}px`,
+        `--orders-nav-height:${navHeight}px`,
+      ].join(';'),
+    };
+  } catch {
+    return {
+      cssVars: [
+        `--orders-status-top:${fallback.statusBarHeight}px`,
+        `--orders-capsule-top:${fallback.capsuleTop}px`,
+        `--orders-capsule-height:${fallback.capsuleHeight}px`,
+        `--orders-capsule-left:${fallback.capsuleLeft}px`,
+        `--orders-nav-height:${fallback.navHeight}px`,
+      ].join(';'),
+    };
+  }
 }

@@ -1,16 +1,27 @@
 .orders-page {
+  padding-top: calc(var(--orders-nav-height, 98px) + 22px);
+
   .summary-strip {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 10px;
-    padding: 12px 2px 8px;
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 30;
+    display: block;
+    min-height: var(--orders-nav-height, 98px);
+    margin: 0;
+    padding:
+      calc(var(--orders-capsule-top, 54px) - 1px)
+      14px
+      12px;
+    background: #ffffff;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
   }
 
   .summary-copy {
     display: grid;
     gap: 4px;
+    width: calc(var(--orders-capsule-left, 288px) - 28px);
     min-width: 0;
   }
 
@@ -30,9 +41,10 @@
   }
 
   .filter-trigger {
+    width: 64px;
     height: 34px;
     min-height: 34px;
-    padding: 0 12px;
+    padding: 0;
     border-radius: 999px;
     color: #bd1c22;
     background: rgba(189, 28, 34, 0.08);
@@ -40,11 +52,18 @@
     font-weight: 800;
   }
 
+  .list-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 64px;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
   .filter-tabs {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 4px;
-    margin-bottom: 10px;
     padding: 4px;
     border-radius: 8px;
     background: #ececee;
@@ -58,12 +77,30 @@
     background: transparent;
     font-size: 13px;
     font-weight: 800;
+    gap: 4px;
 
     &.active {
       color: #1a1a1a;
       background: #ffffff;
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
     }
+  }
+
+  .tab-count {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    color: #555555;
+    background: #ffffff;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 18px;
+  }
+
+  .tab.active .tab-count {
+    color: #ffffff;
+    background: #1a1a1a;
   }
 
   .filter-card {
