@@ -19,8 +19,10 @@ import {
   type CartItem,
   type CartProject,
   type EnterpriseProfile,
+  type ApprovalMode,
   type LocalOsHandoff,
   type LocalOrderSnapshot,
+  type LocalQuoteRequest,
   type PaymentMethod,
 } from '@hitbot/domain';
 import { hitbotMiniApi } from './api';
@@ -28,9 +30,8 @@ import { hitbotMiniApi } from './api';
 const STORAGE_KEY = 'hitbot-mini-store-v1';
 const DEFAULT_ENTERPRISE_ID = defaultProfile.enterpriseId;
 
-type MiniApprovalMode = 'buyer-review' | 'admin-review' | 'admin-direct' | 'not-required';
 type MiniOrderWithApproval = LocalOrderSnapshot & {
-  approvalMode?: MiniApprovalMode;
+  approvalMode?: ApprovalMode;
   approvedBy?: string;
 };
 export type MiniOrderActionKind = 'approve' | 'pay' | 'receive' | 'view';
@@ -79,6 +80,7 @@ export interface MiniAppState {
   };
   orders: LocalOrderSnapshot[];
   handoffs: LocalOsHandoff[];
+  quoteRequests: LocalQuoteRequest[];
   addresses: AddressProfile[];
   invoices: InvoiceProfile[];
 }
@@ -94,6 +96,7 @@ const defaultState: MiniAppState = {
   },
   orders: [],
   handoffs: [],
+  quoteRequests: [],
   addresses: [],
   invoices: [],
 };
@@ -112,6 +115,8 @@ function persist() {
     categories: state.categories,
     products: state.products,
     orders: state.orders,
+    quoteRequests: state.quoteRequests,
+    handoffs: state.handoffs,
     addresses: state.addresses,
     invoices: state.invoices,
   };
@@ -149,6 +154,8 @@ export function initMiniStore() {
       categories: state.categories,
       products: state.products,
       orders: state.orders,
+      quoteRequests: state.quoteRequests,
+      handoffs: state.handoffs,
       addresses: state.addresses,
       invoices: state.invoices,
     });
@@ -195,6 +202,13 @@ export function selectMiniEnterpriseHandoffs(snapshot: MiniAppState = state) {
   return snapshot.handoffs.filter((handoff) => isSameEnterprise(profile, handoff));
 }
 
+export function selectMiniEnterpriseQuoteRequests(snapshot: MiniAppState = state) {
+  const profile = currentEnterpriseProfile(snapshot);
+  if (!profile) return [];
+
+  return snapshot.quoteRequests.filter((request) => isSameEnterprise(profile, request));
+}
+
 export function selectMiniEnterpriseAddresses(snapshot: MiniAppState = state) {
   const profile = currentEnterpriseProfile(snapshot);
   if (!profile) return [];
@@ -223,7 +237,7 @@ export function resolveMiniOrderAction(
     actionLabel: '查看详情',
     canAct: false,
     isTodo: false,
-    lockedLabel: '锁定/查看详情',
+    lockedLabel: '查看详情',
   };
 
   if (!profile) {
@@ -257,7 +271,7 @@ export function resolveMiniOrderAction(
     if (canPayMiniOrder(profile)) {
       return {
         actionKind: 'pay',
-        actionLabel: '立即支付',
+        actionLabel: order.paymentMethod === 'personal' ? '微信支付' : '确认付款',
         canAct: true,
         isTodo: true,
         lockedLabel: '',
@@ -565,10 +579,13 @@ export async function loginEnterpriseMember(input: EnterpriseMemberLoginInput) {
   try {
     await hitbotMiniApi.loginWithWechat({ code: await getWechatLoginCode() });
     const session = await hitbotMiniApi.loginEnterpriseMember(input);
-    const [categoriesValue, productsValue, orders, addresses, invoices] = await Promise.all([
+    const [categoriesValue, productsValue, orders, quoteRequests, handoffs, addresses, invoices] =
+      await Promise.all([
       hitbotMiniApi.listCategories(),
       hitbotMiniApi.listProducts(),
       hitbotMiniApi.listOrders(),
+      hitbotMiniApi.listQuoteRequests(),
+      hitbotMiniApi.listHandoffs(),
       hitbotMiniApi.listAddresses(),
       hitbotMiniApi.listInvoices(),
     ]);
@@ -578,6 +595,8 @@ export async function loginEnterpriseMember(input: EnterpriseMemberLoginInput) {
       categories: categoriesValue,
       products: productsValue,
       orders,
+      quoteRequests,
+      handoffs,
       addresses,
       invoices,
     };
@@ -614,14 +633,26 @@ export function signOutEnterprise() {
 }
 
 export async function loadBootstrapData() {
-  const [categoriesValue, productsValue, orders, addresses, invoices] = await Promise.all([
+  const [categoriesValue, productsValue, orders, quoteRequests, handoffs, addresses, invoices] =
+    await Promise.all([
     hitbotMiniApi.listCategories(),
     hitbotMiniApi.listProducts(),
     hitbotMiniApi.listOrders(),
+    hitbotMiniApi.listQuoteRequests(),
+    hitbotMiniApi.listHandoffs(),
     hitbotMiniApi.listAddresses(),
     hitbotMiniApi.listInvoices(),
   ]);
-  state = { ...state, categories: categoriesValue, products: productsValue, orders, addresses, invoices };
+  state = {
+    ...state,
+    categories: categoriesValue,
+    products: productsValue,
+    orders,
+    quoteRequests,
+    handoffs,
+    addresses,
+    invoices,
+  };
   persist();
   emit();
   return state;
@@ -710,12 +741,20 @@ export async function submitActiveCart(options?: {
   if (paymentMethod === 'corporate' && !isCompleteInvoice(invoice)) {
     throw new Error('INVOICE_REQUIRED');
   }
+  const activeHandoff = state.handoffs.find(
+    (handoff) =>
+      handoff.projectId === project.projectId &&
+      handoff.status !== 'submitted' &&
+      isSameEnterprise(profile, handoff),
+  );
+  const clientRequestId = createSubmitClientRequestId(profile, project);
 
   const result = await hitbotMiniApi.submitCart({
     projectId: project.projectId,
     projectName: project.projectName,
+    handoffId: activeHandoff?.id,
+    clientRequestId,
     items: project.items,
-    enterprise: profile,
     paymentMethod,
     shippingAddress: shippingAddress
       ? {
@@ -738,10 +777,27 @@ export async function submitActiveCart(options?: {
     note: options?.note,
   });
   const orders = await hitbotMiniApi.listOrders();
+  const quoteRequests = await hitbotMiniApi.listQuoteRequests();
   const submittedAt = new Date().toISOString();
+  const key = state.activeProjectKey;
+  const submittedProductIds = new Set(
+    project.items
+      .filter((item) => item.selected && (item.sellable || item.quoteRequired))
+      .map((item) => item.productId),
+  );
+  const remainingItems = project.items.filter((item) => !submittedProductIds.has(item.productId));
   state = {
     ...state,
     orders,
+    quoteRequests,
+    projects: {
+      ...state.projects,
+      [key]: {
+        ...project,
+        items: remainingItems,
+        updatedAt: Date.now(),
+      },
+    },
     handoffs: state.handoffs.map((handoff) =>
       handoff.projectId === project.projectId &&
       handoff.status !== 'submitted' &&
@@ -779,20 +835,26 @@ export function handoffActiveCart() {
   const existingHandoff = state.handoffs.find(
     (handoff) => handoff.projectId === project.projectId && isSameEnterprise(profile, handoff),
   );
+  const canUpdateExisting = Boolean(existingHandoff && existingHandoff.status !== 'submitted');
+  const snapshotItems = project.items.map((item) => ({
+    ...item,
+    syncStatus: 'synced' as const,
+  }));
   const nextHandoff: LocalOsHandoff = {
-    id: existingHandoff?.id ?? nextHandoffId(project.projectId),
-    enterpriseId: existingHandoff?.enterpriseId ?? profile.enterpriseId,
-    companyName: existingHandoff?.companyName ?? profile.companyName,
+    id: canUpdateExisting && existingHandoff ? existingHandoff.id : nextHandoffId(project.projectId),
+    enterpriseId: canUpdateExisting && existingHandoff ? existingHandoff.enterpriseId : profile.enterpriseId,
+    companyName: canUpdateExisting && existingHandoff ? existingHandoff.companyName : profile.companyName,
     projectId: project.projectId,
     projectName: project.projectName,
-    itemCount: project.items.length,
-    submittedBy: existingHandoff?.submittedBy ?? profile.contactName,
-    submittedAt: existingHandoff?.submittedAt ?? now,
-    acceptedBy: existingHandoff?.acceptedBy,
-    acceptedAt: existingHandoff?.acceptedAt,
-    submittedOrderNo: existingHandoff?.submittedOrderNo,
-    orderSubmittedAt: existingHandoff?.orderSubmittedAt,
-    status: existingHandoff?.status === 'submitted' ? 'submitted' : 'pending',
+    itemCount: snapshotItems.length,
+    items: snapshotItems,
+    submittedBy: canUpdateExisting && existingHandoff ? existingHandoff.submittedBy : profile.contactName,
+    submittedAt: canUpdateExisting && existingHandoff ? existingHandoff.submittedAt : now,
+    acceptedBy: canUpdateExisting && existingHandoff ? existingHandoff.acceptedBy : undefined,
+    acceptedAt: canUpdateExisting && existingHandoff ? existingHandoff.acceptedAt : undefined,
+    submittedOrderNo: canUpdateExisting && existingHandoff ? existingHandoff.submittedOrderNo : undefined,
+    orderSubmittedAt: canUpdateExisting && existingHandoff ? existingHandoff.orderSubmittedAt : undefined,
+    status: canUpdateExisting && existingHandoff ? existingHandoff.status : 'pending',
     updatedAt: now,
   };
 
@@ -802,14 +864,11 @@ export function handoffActiveCart() {
       ...state.projects,
       [key]: {
         ...project,
-        items: project.items.map((item) => ({
-          ...item,
-          syncStatus: 'synced',
-        })),
+        items: snapshotItems,
         updatedAt: Date.now(),
       },
     },
-    handoffs: existingHandoff
+    handoffs: canUpdateExisting && existingHandoff
       ? state.handoffs.map((handoff) =>
           handoff.id === existingHandoff.id ? nextHandoff : handoff,
         )
@@ -831,27 +890,52 @@ export function acceptMiniHandoff(projectId: string) {
   if (!profile || profile.role === 'engineer') return null;
 
   const acceptedAt = new Date().toISOString();
-  let accepted: LocalOsHandoff | null = null;
+  const targetHandoff = state.handoffs.find(
+    (handoff) =>
+      handoff.projectId === projectId &&
+      handoff.status === 'pending' &&
+      isSameEnterprise(profile, handoff),
+  );
+  if (!targetHandoff) return null;
+
+  const accepted: LocalOsHandoff = {
+    ...targetHandoff,
+    status: 'accepted',
+    acceptedBy: profile.contactName,
+    acceptedAt,
+    updatedAt: acceptedAt,
+  };
+  const snapshotItems = (targetHandoff.items ?? []).map((item) => ({
+    ...item,
+    syncStatus: 'synced' as const,
+  }));
+  const nextHandoffs = state.handoffs.map((handoff) =>
+    handoff.id === accepted.id ? accepted : handoff,
+  );
+
+  const projectKey: MiniAppState['activeProjectKey'] =
+    state.projects.web.projectId === accepted.projectId ? 'web' : 'os';
+  const currentProject = state.projects[projectKey];
   state = {
     ...state,
-    handoffs: state.handoffs.map((handoff) => {
-      if (
-        handoff.projectId !== projectId ||
-        handoff.status !== 'pending' ||
-        !isSameEnterprise(profile, handoff)
-      ) {
-        return handoff;
-      }
-
-      accepted = {
-        ...handoff,
-        status: 'accepted',
-        acceptedBy: profile.contactName,
-        acceptedAt,
-        updatedAt: acceptedAt,
-      };
-      return accepted;
-    }),
+    activeProjectKey: projectKey,
+    projects:
+      snapshotItems && snapshotItems.length > 0
+        ? {
+            ...state.projects,
+            [projectKey]: {
+              ...currentProject,
+              enterpriseId: accepted.enterpriseId,
+              companyName: accepted.companyName,
+              projectId: accepted.projectId,
+              projectName: accepted.projectName,
+              source: projectKey,
+              items: snapshotItems,
+              updatedAt: Date.now(),
+            },
+          }
+        : state.projects,
+    handoffs: nextHandoffs,
   };
   persist();
   emit();
@@ -867,12 +951,38 @@ export async function advanceOrder(orderNo: string) {
   return orders;
 }
 
+export async function provideQuoteRequest(requestNo: string) {
+  await hitbotMiniApi.provideQuote(requestNo);
+  const quoteRequests = await hitbotMiniApi.listQuoteRequests();
+  state = { ...state, quoteRequests };
+  persist();
+  emit();
+  return quoteRequests;
+}
+
+export async function acceptQuoteRequest(requestNo: string) {
+  await hitbotMiniApi.acceptQuote(requestNo);
+  const [orders, quoteRequests] = await Promise.all([
+    hitbotMiniApi.listOrders(),
+    hitbotMiniApi.listQuoteRequests(),
+  ]);
+  state = { ...state, orders, quoteRequests };
+  persist();
+  emit();
+  return { orders, quoteRequests };
+}
+
 export async function createOrderPayment(orderNo: string): Promise<PaymentParams> {
   return hitbotMiniApi.createPayment(orderNo);
 }
 
 export async function confirmOrderPayment(orderNo: string) {
-  await hitbotMiniApi.confirmPayment(orderNo);
+  const order = findEnterpriseOrder(orderNo);
+  if (order?.paymentMethod === 'personal') {
+    await hitbotMiniApi.confirmPayment(orderNo);
+  } else {
+    await hitbotMiniApi.confirmCorporatePayment(orderNo);
+  }
   const orders = await hitbotMiniApi.listOrders();
   state = { ...state, orders };
   persist();
@@ -929,6 +1039,21 @@ function canReceiveMiniOrder(profile: EnterpriseProfile) {
 function nextHandoffId(projectId: string) {
   const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
   return `OS-${projectId}-${stamp}`;
+}
+
+function createSubmitClientRequestId(profile: EnterpriseProfile, project: CartProject) {
+  const selectedRevision = project.items
+    .filter((item) => item.selected && (item.sellable || item.quoteRequired))
+    .map((item) => `${item.productId}:${item.qty}:${item.source}:${item.partClass}`)
+    .sort()
+    .join('|');
+  return [
+    'mini-submit',
+    profile.enterpriseId,
+    project.projectId,
+    project.updatedAt,
+    selectedRevision,
+  ].join(':');
 }
 
 function isSameEnterprise(profile: EnterpriseProfile, record: { enterpriseId?: string }) {

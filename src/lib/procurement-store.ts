@@ -2,6 +2,14 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import {
+  addressProfiles as sharedAddressBook,
+  defaultProfile as sharedDefaultProfile,
+  invoiceProfiles as sharedInvoiceProfiles,
+  orders as sharedOrders,
+  osHandoffs as sharedOsHandoffs,
+  quoteRequests as sharedQuoteRequests,
+} from '@hitbot/domain';
 import { approvalSettingsForEnterprise, useAdminStore } from '@/lib/admin-store';
 import type {
   AddressProfile,
@@ -48,456 +56,6 @@ const defaultDraft: CheckoutDraft = {
   approver: MOCK_ADMIN_NAME,
   note: '',
 };
-
-const defaultAddressBook: AddressProfile[] = [
-  {
-    id: 'addr-hq',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    label: '客户总部',
-    recipient: defaultDraft.recipient,
-    phone: defaultDraft.phone,
-    province: defaultDraft.province,
-    city: defaultDraft.city,
-    address: '南山区科技园客户总部 A 栋 8 楼',
-    updatedAt: '2026-06-01T00:00:00.000Z',
-  },
-  {
-    id: 'addr-lab',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    label: '产线收货点',
-    recipient: '顾明澈',
-    phone: '17701551867',
-    province: '广东省',
-    city: '深圳市',
-    address: '宝安区智能制造园 2 号产线仓',
-    updatedAt: '2026-06-01T00:00:00.000Z',
-  },
-];
-
-const defaultInvoiceProfiles: InvoiceProfile[] = [
-  {
-    id: 'inv-customer',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    label: '客户公司抬头',
-    title: defaultDraft.invoiceTitle,
-    taxId: defaultDraft.taxId,
-    bankAccount: defaultDraft.bankAccount,
-    updatedAt: '2026-06-01T00:00:00.000Z',
-  },
-];
-
-function orderLine(
-  productId: string,
-  model: string,
-  zhName: string,
-  enName: string,
-  qty: number,
-  unitPriceCents: number,
-  options: Partial<
-    Pick<OrderLineSnapshot, 'partClass' | 'source' | 'sellable' | 'quoteRequired'>
-  > = {},
-): OrderLineSnapshot {
-  return {
-    productId,
-    model,
-    name: { zh: zhName, en: enName },
-    partClass: options.partClass ?? 'standard',
-    qty,
-    source: options.source ?? 'web',
-    selected: true,
-    sellable: options.sellable ?? true,
-    quoteRequired: options.quoteRequired ?? false,
-    unitPriceCents,
-    subtotalCents: unitPriceCents * qty,
-    currency: 'CNY',
-  };
-}
-
-const defaultOrderAddress: OrderAddressSnapshot = {
-  recipient: MOCK_BUYER_NAME,
-  phone: '15507540989',
-  province: '广东省',
-  city: '深圳市',
-  address: '宝安区智能制造园 2 号产线仓',
-};
-
-const defaultOrderInvoice: OrderInvoiceSnapshot = {
-  title: defaultDraft.invoiceTitle,
-  taxId: defaultDraft.taxId,
-  bankAccount: defaultDraft.bankAccount,
-};
-
-const stationUpgradeLines = [
-  orderLine('p-004', 'Z-Arm S622', 'Z-Arm S622 四轴机械臂', 'Z-Arm S622 SCARA Robot', 2, 1800000, {
-    source: 'os',
-  }),
-  orderLine('p-003', 'Z-EFG-20', 'Z-EFG-20 电动夹爪', 'Z-EFG-20 Electric Gripper', 2, 450000, {
-    source: 'os',
-  }),
-];
-
-const labFixtureLines = [
-  orderLine('p-010', 'Custom-Frame-A1', '定制工装框架 A1', 'Custom Fixture Frame A1', 1, 0, {
-    partClass: 'custom',
-    source: 'os',
-    sellable: false,
-    quoteRequired: true,
-  }),
-  orderLine('p-002', 'Z-EFG-8S', 'Z-EFG-8S 电动夹爪', 'Z-EFG-8S Electric Gripper', 4, 320000, {
-    source: 'os',
-  }),
-];
-
-const sortingCellLines = [
-  orderLine('p-005', 'Z-Arm 2442', 'Z-Arm 2442 四轴机械臂', 'Z-Arm 2442 SCARA Robot', 1, 1200000),
-  orderLine('p-008', 'Z-Mod-SE-54', 'Z-Mod-SE-54 末端模块', 'Z-Mod-SE-54 End Module', 2, 580000),
-];
-
-const calibrationCellLines = [
-  orderLine('p-001', 'Z-EMG-4', 'Z-EMG-4 电动夹爪', 'Z-EMG-4 Electric Gripper', 2, 280000),
-  orderLine('p-008', 'Z-Mod-SE-54', 'Z-Mod-SE-54 末端模块', 'Z-Mod-SE-54 End Module', 1, 580000),
-];
-
-const handSortingLines = [
-  orderLine('p-007', 'Z-Hand 6', 'Z-Hand 6 灵巧手', 'Z-Hand 6 Dexterous Hand', 1, 9800000),
-];
-
-const desktopDemoLines = [
-  orderLine('p-001', 'Z-EMG-4', 'Z-EMG-4 电动夹爪', 'Z-EMG-4 Electric Gripper', 1, 280000),
-  orderLine('p-002', 'Z-EFG-8S', 'Z-EFG-8S 电动夹爪', 'Z-EFG-8S Electric Gripper', 1, 320000),
-];
-
-const defaultOrders: LocalOrderSnapshot[] = [
-  {
-    orderNo: 'HB20260601093001',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'line-pack-01',
-    projectName: '包装线上料工位改造',
-    handoffId: 'OS-line-pack-01-20260601090000',
-    role: 'engineer',
-    approvalMode: 'admin-review',
-    submittedBy: MOCK_ENGINEER_NAME,
-    approver: MOCK_ADMIN_NAME,
-    paymentMethod: 'corporate',
-    lines: stationUpgradeLines,
-    shippingAddress: defaultOrderAddress,
-    invoice: defaultOrderInvoice,
-    note: '需与现有输送线安装节拍匹配，审批后安排采购付款。',
-    subtotalCents: 4500000,
-    itemCount: 4,
-    submittedAt: '2026-06-01T01:30:00.000Z',
-    updatedAt: '2026-06-01T01:30:00.000Z',
-    status: 'pending-approval',
-  },
-  {
-    orderNo: 'HB20260602143018',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'sort-cell-02',
-    projectName: '分拣单元末端执行器补充',
-    role: 'buyer',
-    approvalMode: 'admin-review',
-    submittedBy: MOCK_BUYER_NAME,
-    approvedBy: MOCK_ADMIN_NAME,
-    approvedAt: '2026-06-02T06:35:00.000Z',
-    paymentMethod: 'corporate',
-    lines: sortingCellLines,
-    shippingAddress: defaultOrderAddress,
-    invoice: defaultOrderInvoice,
-    note: '本周内确认付款，设备到货后给工程组安装。',
-    subtotalCents: 2360000,
-    itemCount: 3,
-    submittedAt: '2026-06-02T06:30:18.000Z',
-    updatedAt: '2026-06-02T06:35:00.000Z',
-    status: 'pending-payment',
-  },
-  {
-    orderNo: 'HB20260603161042',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'lab-fixture-03',
-    projectName: '实验室测试夹具升级',
-    handoffId: 'OS-lab-fixture-03-20260603153000',
-    role: 'engineer',
-    approvalMode: 'buyer-review',
-    submittedBy: MOCK_ENGINEER_NAME,
-    approvedBy: MOCK_BUYER_NAME,
-    approvedAt: '2026-06-03T08:05:00.000Z',
-    paymentMethod: 'corporate',
-    lines: labFixtureLines,
-    shippingAddress: defaultOrderAddress,
-    invoice: defaultOrderInvoice,
-    note: '含定制加工件，待报价后确认总价。',
-    subtotalCents: 1280000,
-    itemCount: 5,
-    submittedAt: '2026-06-03T07:50:42.000Z',
-    updatedAt: '2026-06-03T08:05:00.000Z',
-    status: 'pending-quote',
-  },
-  {
-    orderNo: 'HB20260529101533',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'vision-pick-04',
-    projectName: '视觉抓取验证线',
-    role: 'buyer',
-    approvalMode: 'admin-review',
-    submittedBy: MOCK_BUYER_NAME,
-    approvedBy: MOCK_ADMIN_NAME,
-    approvedAt: '2026-05-29T02:18:00.000Z',
-    paidBy: MOCK_BUYER_NAME,
-    paidAt: '2026-05-29T03:20:00.000Z',
-    paymentReference: 'PAY-CORP-0529101533',
-    productionStartedAt: '2026-05-30T01:00:00.000Z',
-    paymentMethod: 'corporate',
-    lines: [
-      orderLine(
-        'p-006',
-        'Z-Arm H1500',
-        'Z-Arm H1500 协作机械臂',
-        'Z-Arm H1500 Robot Arm',
-        1,
-        8500000,
-      ),
-    ],
-    shippingAddress: defaultOrderAddress,
-    invoice: defaultOrderInvoice,
-    note: '设备进入装配排产，待出厂测试完成后发货。',
-    subtotalCents: 8500000,
-    itemCount: 1,
-    submittedAt: '2026-05-29T02:15:33.000Z',
-    updatedAt: '2026-05-30T01:00:00.000Z',
-    status: 'in-production',
-  },
-  {
-    orderNo: 'HB20260528140526',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'calibration-cell-06',
-    projectName: '标定工位夹爪补充',
-    role: 'buyer',
-    approvalMode: 'admin-review',
-    submittedBy: MOCK_BUYER_NAME,
-    approvedBy: MOCK_ADMIN_NAME,
-    approvedAt: '2026-05-28T06:20:00.000Z',
-    paidBy: MOCK_BUYER_NAME,
-    paidAt: '2026-05-28T07:05:00.000Z',
-    paymentReference: 'PAY-CORP-0528140526',
-    paymentMethod: 'corporate',
-    lines: calibrationCellLines,
-    shippingAddress: defaultOrderAddress,
-    invoice: defaultOrderInvoice,
-    note: '付款已确认，等待生产排期。',
-    subtotalCents: 1140000,
-    itemCount: 3,
-    submittedAt: '2026-05-28T06:05:26.000Z',
-    updatedAt: '2026-05-28T07:05:00.000Z',
-    status: 'paid',
-  },
-  {
-    orderNo: 'HB20260526111640',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'hand-sorting-07',
-    projectName: '灵巧手分拣验证项目',
-    role: 'buyer',
-    approvalMode: 'admin-review',
-    submittedBy: MOCK_BUYER_NAME,
-    approvedBy: MOCK_ADMIN_NAME,
-    approvedAt: '2026-05-26T03:26:00.000Z',
-    paidBy: MOCK_BUYER_NAME,
-    paidAt: '2026-05-26T04:10:00.000Z',
-    paymentReference: 'PAY-CORP-0526111640',
-    productionStartedAt: '2026-05-27T01:30:00.000Z',
-    shippedAt: '2026-05-28T08:45:00.000Z',
-    carrier: 'SF Express',
-    trackingNo: 'SF0526111640',
-    paymentMethod: 'corporate',
-    lines: handSortingLines,
-    shippingAddress: {
-      ...defaultOrderAddress,
-      recipient: MOCK_ENGINEER_NAME,
-      phone: '17701551867',
-    },
-    invoice: defaultOrderInvoice,
-    note: '已发货到工程测试点，等待物流负责人确认收货。',
-    subtotalCents: 9800000,
-    itemCount: 1,
-    submittedAt: '2026-05-26T03:16:40.000Z',
-    updatedAt: '2026-05-28T08:45:00.000Z',
-    status: 'shipped',
-  },
-  {
-    orderNo: 'HB20260520100812',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'desktop-demo-08',
-    projectName: '桌面演示单元备件',
-    role: 'admin',
-    approvalMode: 'admin-direct',
-    submittedBy: MOCK_ADMIN_NAME,
-    approvedBy: MOCK_ADMIN_NAME,
-    approvedAt: '2026-05-20T02:08:12.000Z',
-    paidBy: MOCK_BUYER_NAME,
-    paidAt: '2026-05-20T03:15:00.000Z',
-    paymentReference: 'PAY-CORP-0520100812',
-    productionStartedAt: '2026-05-21T01:00:00.000Z',
-    shippedAt: '2026-05-22T06:35:00.000Z',
-    completedAt: '2026-05-23T02:40:00.000Z',
-    carrier: 'SF Express',
-    trackingNo: 'SF0520100812',
-    paymentMethod: 'corporate',
-    lines: desktopDemoLines,
-    shippingAddress: defaultOrderAddress,
-    invoice: defaultOrderInvoice,
-    note: '演示单元备件已完成收货。',
-    subtotalCents: 600000,
-    itemCount: 2,
-    submittedAt: '2026-05-20T02:08:12.000Z',
-    updatedAt: '2026-05-23T02:40:00.000Z',
-    status: 'completed',
-  },
-];
-
-const defaultQuoteRequests: LocalQuoteRequest[] = [
-  {
-    requestNo: 'HQ20260603161108',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    orderNo: 'HB20260603161042',
-    projectName: '实验室测试夹具升级',
-    lines: labFixtureLines,
-    submittedBy: MOCK_ENGINEER_NAME,
-    submittedAt: '2026-06-03T07:51:08.000Z',
-    updatedAt: '2026-06-03T07:51:08.000Z',
-    status: 'pending-quote',
-  },
-  {
-    requestNo: 'HQ20260604100519',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    orderNo: 'HB20260604100452',
-    projectName: '治具快换安装板',
-    lines: [
-      orderLine(
-        'p-010',
-        'Custom-Frame-A1',
-        '治具快换安装板',
-        'Quick-change Fixture Plate',
-        3,
-        168000,
-        {
-          partClass: 'custom',
-          source: 'web',
-          quoteRequired: true,
-        },
-      ),
-    ],
-    submittedBy: MOCK_BUYER_NAME,
-    submittedAt: '2026-06-04T02:05:19.000Z',
-    quotedAt: '2026-06-04T06:20:00.000Z',
-    quotedBy: 'HITBOT 商务',
-    estimateCents: 504000,
-    note: '含加工、表面处理与随箱附件。',
-    updatedAt: '2026-06-04T06:20:00.000Z',
-    status: 'quoted',
-  },
-  {
-    requestNo: 'HQ20260527143022',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    orderNo: 'HB20260527142958',
-    projectName: '末端法兰定制转接板',
-    lines: [
-      orderLine(
-        'p-010',
-        'Custom-Frame-A1',
-        '末端法兰定制转接板',
-        'Custom End-flange Adapter',
-        2,
-        238000,
-        {
-          partClass: 'custom',
-          source: 'web',
-          quoteRequired: true,
-        },
-      ),
-    ],
-    submittedBy: MOCK_BUYER_NAME,
-    submittedAt: '2026-05-27T06:30:22.000Z',
-    quotedAt: '2026-05-27T08:15:00.000Z',
-    quotedBy: 'HITBOT 商务',
-    estimateCents: 476000,
-    note: '报价已确认，保留为已完成询价样例。',
-    updatedAt: '2026-05-27T09:05:00.000Z',
-    status: 'accepted',
-  },
-];
-
-const defaultOsHandoffs: LocalOsHandoff[] = [
-  {
-    id: 'OS-line-pack-01-20260601090000',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'line-pack-01',
-    projectName: '包装线上料工位改造',
-    itemCount: 4,
-    submittedBy: MOCK_ENGINEER_NAME,
-    submittedAt: '2026-06-01T01:00:00.000Z',
-    acceptedBy: MOCK_BUYER_NAME,
-    acceptedAt: '2026-06-01T01:18:00.000Z',
-    submittedOrderNo: 'HB20260601093001',
-    orderSubmittedAt: '2026-06-01T01:30:00.000Z',
-    updatedAt: '2026-06-01T01:30:00.000Z',
-    status: 'submitted',
-  },
-  {
-    id: 'OS-lab-fixture-03-20260603153000',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'lab-fixture-03',
-    projectName: '实验室测试夹具升级',
-    itemCount: 5,
-    submittedBy: MOCK_ENGINEER_NAME,
-    submittedAt: '2026-06-03T07:30:00.000Z',
-    acceptedBy: MOCK_BUYER_NAME,
-    acceptedAt: '2026-06-03T07:45:00.000Z',
-    submittedOrderNo: 'HB20260603161042',
-    orderSubmittedAt: '2026-06-03T07:50:42.000Z',
-    updatedAt: '2026-06-03T07:50:42.000Z',
-    status: 'submitted',
-  },
-  {
-    id: 'OS-end-effector-05-20260605112000',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'end-effector-05',
-    projectName: '末端执行器备件补充',
-    itemCount: 6,
-    submittedBy: MOCK_ENGINEER_NAME,
-    submittedAt: '2026-06-05T03:20:00.000Z',
-    updatedAt: '2026-06-05T03:20:00.000Z',
-    status: 'pending',
-  },
-  {
-    id: 'OS-pallet-check-06-20260606103000',
-    enterpriseId: defaultProfile.enterpriseId,
-    companyName: defaultProfile.companyName,
-    projectId: 'pallet-check-06',
-    projectName: '托盘检测工位接续',
-    itemCount: 3,
-    submittedBy: MOCK_ENGINEER_NAME,
-    submittedAt: '2026-06-06T02:30:00.000Z',
-    acceptedBy: MOCK_BUYER_NAME,
-    acceptedAt: '2026-06-06T03:10:00.000Z',
-    updatedAt: '2026-06-06T03:10:00.000Z',
-    status: 'accepted',
-  },
-];
 
 interface SubmitOrderInput {
   projectId: string;
@@ -784,16 +342,16 @@ export const useProcurementStore = create<ProcurementState>()(
   persist(
     (set, get) => ({
       isAuthenticated: false,
-      profile: defaultProfile,
+      profile: sharedDefaultProfile,
       checkoutDraft: defaultDraft,
       checkoutDrafts: {
         [defaultProfile.enterpriseId]: defaultDraft,
       },
-      addressBook: defaultAddressBook,
-      invoiceProfiles: defaultInvoiceProfiles,
-      orders: defaultOrders,
-      quoteRequests: defaultQuoteRequests,
-      osHandoffs: defaultOsHandoffs,
+      addressBook: sharedAddressBook,
+      invoiceProfiles: sharedInvoiceProfiles,
+      orders: sharedOrders,
+      quoteRequests: sharedQuoteRequests,
+      osHandoffs: sharedOsHandoffs,
       signIn: () =>
         set((state) => ({
           isAuthenticated: true,
@@ -1415,7 +973,7 @@ export const useProcurementStore = create<ProcurementState>()(
           },
           addressBook: (persisted.addressBook?.length
             ? persisted.addressBook
-            : defaultAddressBook
+            : sharedAddressBook
           ).map((address) =>
             withDefaultEnterprise({
               ...address,
@@ -1431,20 +989,20 @@ export const useProcurementStore = create<ProcurementState>()(
                   companyName: normalizeCompanyText(invoice.companyName, profile.companyName),
                 }),
               )
-            : defaultInvoiceProfiles,
-          orders: mergeDefaultRecords(persisted.orders, defaultOrders, (order) => order.orderNo)
+            : sharedInvoiceProfiles,
+          orders: mergeDefaultRecords(persisted.orders, sharedOrders, (order) => order.orderNo)
             .map(normalizeOrderApproval)
             .map(withDefaultEnterprise),
           quoteRequests: mergeDefaultRecords(
             persisted.quoteRequests,
-            defaultQuoteRequests,
+            sharedQuoteRequests,
             (request) => request.requestNo,
           )
             .map(normalizeQuoteRequestPeople)
             .map(withDefaultEnterprise),
           osHandoffs: mergeDefaultRecords(
             persisted.osHandoffs,
-            defaultOsHandoffs,
+            sharedOsHandoffs,
             (handoff) => handoff.id,
           )
             .map(normalizeOsHandoffPeople)

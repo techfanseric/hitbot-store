@@ -116,6 +116,25 @@
     background: #f0f0f1;
   }
 
+  .account-footer-actions {
+    margin: 2px 0 12px;
+    padding: 0 2px;
+  }
+
+  .sign-out-button {
+    display: flex;
+    height: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: #bd1c22;
+    background: rgba(189, 28, 34, 0.06);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 44px;
+  }
+
   .metric {
     display: grid;
     gap: 2px;
@@ -140,6 +159,7 @@
   .menu-list,
   .support-card,
   .handoff-card,
+  .quote-card,
   .bind-card {
     margin-bottom: 10px;
   }
@@ -151,7 +171,7 @@
 
   .menu-item {
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) auto 14px;
+    grid-template-columns: 32px minmax(0, 1fr) auto 14px;
     min-height: 54px;
     align-items: center;
     gap: 10px;
@@ -163,17 +183,21 @@
     box-shadow: none;
   }
 
-  .menu-label {
+  .menu-icon {
     display: flex;
-    width: 42px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
+    border-radius: 8px;
     color: #bd1c22;
     background: rgba(189, 28, 34, 0.08);
-    font-size: 11px;
-    font-weight: 900;
+  }
+
+  .menu-symbol {
+    display: block;
+    width: 18px;
+    height: 18px;
   }
 
   .menu-copy {
@@ -231,12 +255,6 @@
     line-height: 1.45;
   }
 
-  .bind-toggle {
-    color: #bd1c22;
-    font-size: 12px;
-    font-weight: 900;
-  }
-
   .bind-form {
     display: grid;
     gap: 10px;
@@ -253,6 +271,10 @@
   }
 
   .handoff-card {
+    padding: 12px;
+  }
+
+  .quote-card {
     padding: 12px;
   }
 
@@ -281,7 +303,14 @@
     margin-top: 12px;
   }
 
-  .handoff-item {
+  .quote-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .handoff-item,
+  .quote-item {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
@@ -320,7 +349,7 @@
   .handoff-action {
     display: flex;
     min-width: 58px;
-    height: 32px;
+    height: 44px;
     align-items: center;
     justify-content: center;
     border-radius: 999px;
@@ -328,7 +357,26 @@
     background: #1a1a1a;
     font-size: 12px;
     font-weight: 900;
-    line-height: 32px;
+    line-height: 44px;
+  }
+
+  .quote-action {
+    display: flex;
+    min-width: 72px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: #bd1c22;
+    background: rgba(189, 28, 34, 0.08);
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 44px;
+
+    &.primary {
+      color: #ffffff;
+      background: #bd1c22;
+    }
   }
 
   .handoff-status {
@@ -350,11 +398,62 @@
   }
 
   input {
-    height: 40px;
+    height: 44px;
     padding: 0 10px;
     border-radius: 6px;
     background: #f0f0f1;
     color: #1a1a1a;
     font-size: 14px;
+  }
+
+  .member-picker {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18px;
+    gap: 8px;
+    min-height: 48px;
+    align-items: center;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: #f0f0f1;
+
+    &.placeholder {
+      .member-name {
+        color: #777777;
+      }
+    }
+  }
+
+  .member-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  .member-name,
+  .member-email {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .member-name {
+    color: #1a1a1a;
+    font-size: 14px;
+    font-weight: 900;
+  }
+
+  .member-email {
+    color: #777777;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .member-arrow {
+    color: #999999;
+    font-size: 20px;
+    font-weight: 300;
+    line-height: 1;
+    text-align: right;
   }
 }

@@ -24,7 +24,7 @@ export function stockLabel(stock: Stock) {
 export function partClassLabel(partClass: PartClass) {
   return {
     standard: '标准件',
-    custom: '定制/询价',
+    custom: '加工件',
     reference: '参考件',
   }[partClass];
 }

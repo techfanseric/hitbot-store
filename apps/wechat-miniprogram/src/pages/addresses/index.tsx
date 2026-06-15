@@ -39,6 +39,20 @@ export default function AddressesPage() {
     );
   }
 
+  if (profile.role === 'engineer') {
+    return (
+      <View className="page profile-list-page">
+        <View className="surface empty-profile">
+          <Text className="row-title">当前身份不可维护地址</Text>
+          <Text className="row-body">工程师身份主要处理项目和询价，企业地址由采购或管理员维护。</Text>
+          <Button className="secondary-button" onClick={() => Taro.switchTab({ url: '/pages/account/index' })}>
+            返回我的
+          </Button>
+        </View>
+      </View>
+    );
+  }
+
   async function submit() {
     if (saving) return;
     if (!form.recipient || !form.phone || !form.city || !form.address) {

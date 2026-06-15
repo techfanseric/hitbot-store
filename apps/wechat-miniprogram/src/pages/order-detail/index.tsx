@@ -32,12 +32,17 @@ export default function OrderDetailPage() {
     setActing(true);
     try {
       if (action.actionKind === 'pay') {
-        const params = await createOrderPayment(order.orderNo);
-        if (!isMockPayment(params)) {
-          await Taro.requestPayment(params as Parameters<typeof Taro.requestPayment>[0]);
+        if (order.paymentMethod === 'personal') {
+          const params = await createOrderPayment(order.orderNo);
+          if (!isMockPayment(params)) {
+            await Taro.requestPayment(params as Parameters<typeof Taro.requestPayment>[0]);
+          }
         }
         await confirmOrderPayment(order.orderNo);
-        Taro.showToast({ title: '付款成功', icon: 'success' });
+        Taro.showToast({
+          title: order.paymentMethod === 'personal' ? '付款成功' : '付款已确认',
+          icon: 'success',
+        });
         return;
       }
 
@@ -47,7 +52,12 @@ export default function OrderDetailPage() {
       }
     } catch {
       Taro.showToast({
-        title: action.actionKind === 'pay' ? '支付未完成' : '操作失败',
+        title:
+          action.actionKind === 'pay'
+            ? order.paymentMethod === 'personal'
+              ? '支付未完成'
+              : '付款确认失败'
+            : '操作失败',
         icon: 'none',
       });
     } finally {
@@ -200,8 +210,8 @@ export default function OrderDetailPage() {
       {canAct && (
         <View className="bottom-bar">
           <View>
-            <Text className="hint">下一步</Text>
-            <Text className="amount">{nextActionLabel}</Text>
+            <Text className="hint">订单金额</Text>
+            <Text className="amount">{formatPrice(order.subtotalCents, 'CNY')}</Text>
           </View>
           <Button className="primary-button" disabled={acting} onClick={handleAction}>
             {acting ? '处理中' : nextActionLabel}

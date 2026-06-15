@@ -227,6 +227,7 @@ export interface LocalOsHandoff {
   projectId: string;
   projectName: string;
   itemCount: number;
+  items?: CartItem[];
   submittedBy?: string;
   submittedAt: string;
   acceptedBy?: string;
@@ -257,6 +258,8 @@ export interface LocalQuoteRequest {
 export interface SubmitCartInput {
   projectId: string;
   projectName: string;
+  handoffId?: string;
+  clientRequestId?: string;
   enterprise: EnterpriseProfile;
   items: CartItem[];
   paymentMethod?: PaymentMethod;
@@ -268,4 +271,5 @@ export interface SubmitCartInput {
 export interface SubmitCartResult {
   order: LocalOrderSnapshot;
   hasQuoteItems: boolean;
+  quoteRequest?: LocalQuoteRequest;
 }

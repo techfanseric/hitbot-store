@@ -62,8 +62,6 @@ export default function ProductsPage() {
     [activeCategory, products],
   );
   const activeFilterCount = [
-    activeCategory !== 'all',
-    keyword.trim().length > 0,
     partClass !== 'all',
     stock !== 'all',
     payload !== null,
@@ -72,6 +70,7 @@ export default function ProductsPage() {
     gripForce !== null,
     dof !== null,
   ].filter(Boolean).length;
+  const hasAnyFilter = activeCategory !== 'all' || keyword.trim().length > 0 || activeFilterCount > 0;
   const visibleProducts = useMemo(
     () =>
       scopedProducts.filter((product) => {
@@ -201,7 +200,7 @@ export default function ProductsPage() {
       <View className="between result-row">
         <Text className="hint">{loading ? '同步商品中' : `${visibleProducts.length} 个结果`}</Text>
         <View className="result-actions">
-          {activeFilterCount > 0 && (
+          {hasAnyFilter && (
             <Button className="clear-button" onClick={clearFilters}>
               清空
             </Button>

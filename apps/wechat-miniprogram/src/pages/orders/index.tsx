@@ -106,21 +106,29 @@ export default function OrdersPage() {
   async function handlePayment(orderNo: string) {
     const order = orders.find((item) => item.orderNo === orderNo);
     const action = order ? resolveMiniOrderAction(order, appState) : null;
-    if (!action?.canAct || action.actionKind !== 'pay') {
+    if (!order || !action?.canAct || action.actionKind !== 'pay') {
       Taro.showToast({ title: action?.lockedReason || '当前角色无权限', icon: 'none' });
       return;
     }
 
     setActingOrderNo(orderNo);
     try {
-      const params = await createOrderPayment(orderNo);
-      if (!isMockPayment(params)) {
-        await Taro.requestPayment(params as Parameters<typeof Taro.requestPayment>[0]);
+      if (order.paymentMethod === 'personal') {
+        const params = await createOrderPayment(orderNo);
+        if (!isMockPayment(params)) {
+          await Taro.requestPayment(params as Parameters<typeof Taro.requestPayment>[0]);
+        }
       }
       await confirmOrderPayment(orderNo);
-      Taro.showToast({ title: '付款成功', icon: 'success' });
+      Taro.showToast({
+        title: order.paymentMethod === 'personal' ? '付款成功' : '付款已确认',
+        icon: 'success',
+      });
     } catch {
-      Taro.showToast({ title: '支付未完成', icon: 'none' });
+      Taro.showToast({
+        title: order.paymentMethod === 'personal' ? '支付未完成' : '付款确认失败',
+        icon: 'none',
+      });
     } finally {
       setActingOrderNo(null);
     }
@@ -236,7 +244,6 @@ export default function OrdersPage() {
       <View className="order-list">
         {visibleOrders.map((order) => {
           const action = resolveMiniOrderAction(order, appState);
-          const lockedButtonLabel = order.status === 'completed' ? '查看详情' : action.lockedLabel;
 
           return (
           <View key={order.orderNo} className="surface order-card">
@@ -283,7 +290,7 @@ export default function OrdersPage() {
                   disabled={actingOrderNo === order.orderNo}
                   onClick={() => handlePayment(order.orderNo)}
                 >
-                  {actingOrderNo === order.orderNo ? '处理中' : '立即支付'}
+                  {actingOrderNo === order.orderNo ? '处理中' : action.actionLabel}
                 </Button>
               )}
               {action.canAct && action.actionKind !== 'pay' && (
@@ -302,7 +309,7 @@ export default function OrdersPage() {
                     Taro.navigateTo({ url: `/pages/order-detail/index?orderNo=${order.orderNo}` })
                   }
                 >
-                  {lockedButtonLabel}
+                  查看详情
                 </Button>
               )}
             </View>

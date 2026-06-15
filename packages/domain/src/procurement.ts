@@ -18,14 +18,21 @@ function nextOrderNo(now = new Date()) {
     String(now.getMinutes()).padStart(2, '0'),
     String(now.getSeconds()).padStart(2, '0'),
   ].join('');
-  return `HB${stamp}`;
+  const millis = String(now.getMilliseconds()).padStart(3, '0');
+  const suffix = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `HB${stamp}${millis}${suffix}`;
 }
 
 export function cartItemsToOrderLines(items: CartItem[]): OrderLineSnapshot[] {
   return items.flatMap((item) => {
-    if (!item.selected) return [];
+    if (!item.selected || (!item.sellable && !item.quoteRequired)) return [];
+    if (!Number.isFinite(item.qty) || item.qty <= 0) {
+      throw new Error('CART_ITEM_QTY_INVALID');
+    }
     const product = getProductById(item.productId);
-    if (!product) return [];
+    if (!product) {
+      throw new Error('PRODUCT_NOT_FOUND');
+    }
     const subtotalCents = item.sellable ? product.priceCents * item.qty : 0;
     return [
       {
@@ -48,6 +55,9 @@ export function cartItemsToOrderLines(items: CartItem[]): OrderLineSnapshot[] {
 
 export function createOrderFromCart(input: SubmitCartInput): SubmitCartResult {
   const lines = cartItemsToOrderLines(input.items);
+  if (lines.length === 0) {
+    throw new Error('CART_SELECTION_REQUIRED');
+  }
   const quoteLines = lines.filter((line) => line.quoteRequired);
   const billableLines = lines.filter((line) => line.sellable);
   const hasQuoteItems = quoteLines.length > 0;
@@ -73,6 +83,7 @@ export function createOrderFromCart(input: SubmitCartInput): SubmitCartResult {
     companyName: input.enterprise.companyName,
     projectId: input.projectId,
     projectName: input.projectName,
+    handoffId: input.handoffId,
     role: input.enterprise.role,
     approvalMode,
     submittedBy: input.enterprise.contactName,

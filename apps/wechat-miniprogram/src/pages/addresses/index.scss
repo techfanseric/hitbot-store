@@ -22,13 +22,11 @@
 
   .row-body {
     display: block;
-    overflow: hidden;
     margin-top: 5px;
     color: #777777;
     font-size: 12px;
     line-height: 1.45;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-break: break-word;
   }
 
   .empty-profile {
@@ -61,7 +59,7 @@
   }
 
   input {
-    height: 42px;
+    height: 44px;
     padding: 0 10px;
     border-radius: 6px;
     background: #f0f0f1;

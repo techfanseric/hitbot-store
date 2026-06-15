@@ -82,7 +82,9 @@ export const osDemoProject: CartProject = {
 };
 
 export function createCartItem(productId: string, partClass: PartClass): CartItem {
-  const sellable = partClass === 'standard';
+  const product = getProductById(productId);
+  const quoteRequired = partClass !== 'standard' || (product?.priceCents ?? 1) <= 0;
+  const sellable = !quoteRequired;
   return {
     productId,
     partClass,
@@ -90,7 +92,7 @@ export function createCartItem(productId: string, partClass: PartClass): CartIte
     source: 'web',
     selected: sellable || partClass === 'custom',
     sellable,
-    quoteRequired: !sellable,
+    quoteRequired,
     syncStatus: 'local',
     addedAt: Date.now(),
   };

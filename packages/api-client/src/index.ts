@@ -6,14 +6,18 @@ import {
   defaultProfile,
   getProductBySlug,
   invoiceProfiles as seedInvoiceProfiles,
+  osHandoffs as seedOsHandoffs,
   orders as seedOrders,
   products as seedProducts,
+  quoteRequests as seedQuoteRequests,
   type AddressProfile,
   type CartItem,
   type Category,
   type EnterpriseProfile,
   type InvoiceProfile,
+  type LocalOsHandoff,
   type LocalOrderSnapshot,
+  type LocalQuoteRequest,
   type Product,
   type SubmitCartInput,
   type SubmitCartResult,
@@ -47,6 +51,8 @@ export interface MiniStoreSnapshot {
   categories: Category[];
   products: Product[];
   orders: LocalOrderSnapshot[];
+  quoteRequests: LocalQuoteRequest[];
+  handoffs: LocalOsHandoff[];
   addresses: AddressProfile[];
   invoices: InvoiceProfile[];
 }
@@ -58,6 +64,8 @@ export interface PaymentParams {
   signType: 'RSA' | 'MD5';
   paySign: string;
 }
+
+export type MiniSubmitCartInput = Omit<SubmitCartInput, 'enterprise'>;
 
 export interface ApiRequestOptions<TBody = unknown> {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -80,14 +88,19 @@ export interface HitbotMiniApi {
   getProduct(slug: string): Promise<Product | null>;
   listOrders(): Promise<LocalOrderSnapshot[]>;
   getOrder(orderNo: string): Promise<LocalOrderSnapshot | null>;
+  listQuoteRequests(): Promise<LocalQuoteRequest[]>;
+  provideQuote(requestNo: string): Promise<LocalQuoteRequest | null>;
+  acceptQuote(requestNo: string): Promise<LocalQuoteRequest | null>;
+  listHandoffs(): Promise<LocalOsHandoff[]>;
   listAddresses(): Promise<AddressProfile[]>;
   listInvoices(): Promise<InvoiceProfile[]>;
   saveAddress(input: Omit<AddressProfile, 'id' | 'updatedAt'> & { id?: string }): Promise<AddressProfile>;
   saveInvoice(input: Omit<InvoiceProfile, 'id' | 'updatedAt'> & { id?: string }): Promise<InvoiceProfile>;
-  submitCart(input: Omit<SubmitCartInput, 'enterprise'> & { enterprise?: EnterpriseProfile }): Promise<SubmitCartResult>;
+  submitCart(input: MiniSubmitCartInput): Promise<SubmitCartResult>;
   advanceOrder(orderNo: string): Promise<LocalOrderSnapshot | null>;
   createPayment(orderNo: string): Promise<PaymentParams>;
   confirmPayment(orderNo: string): Promise<LocalOrderSnapshot | null>;
+  confirmCorporatePayment(orderNo: string): Promise<LocalOrderSnapshot | null>;
   hydrate?(snapshot: MiniStoreSnapshot): void;
   snapshot?(): MiniStoreSnapshot;
 }
@@ -96,7 +109,7 @@ function createToken(seed: string) {
   return `mock-token-${seed || Date.now()}`;
 }
 
-const rememberedMiniMembers: EnterpriseProfile[] = [
+export const rememberedMiniMembers: EnterpriseProfile[] = [
   {
     ...defaultProfile,
     contactName: '林若安',
@@ -143,7 +156,10 @@ function resolveRememberedMiniMember(account: string) {
   const phoneMatches = rememberedMiniMembers.filter(
     (member) => normalizePhone(member.phone) === normalizedPhone,
   );
-  return phoneMatches.find((member) => member.role === 'buyer') ?? phoneMatches[0] ?? null;
+  if (phoneMatches.length > 1) {
+    throw new Error('MINI_ENTERPRISE_MEMBER_AMBIGUOUS');
+  }
+  return phoneMatches[0] ?? null;
 }
 
 function createEnterpriseMemberSession(
@@ -162,13 +178,43 @@ function createEnterpriseMemberSession(
   };
 }
 
+function nextQuoteNo() {
+  const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 17);
+  const suffix = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `HQ${stamp}${suffix}`;
+}
+
+function quoteEstimateCents(lines: Array<{ unitPriceCents: number; qty: number }>) {
+  return lines.reduce((sum, line) => sum + Math.max(line.unitPriceCents, 120000) * line.qty, 0);
+}
+
+function approvalModeForRole(role: EnterpriseProfile['role']) {
+  if (role === 'engineer') return 'buyer-review';
+  if (role === 'buyer') return 'admin-review';
+  return 'admin-direct';
+}
+
+function approverForRole(role: EnterpriseProfile['role']) {
+  if (role === 'engineer') return '陈思远';
+  if (role === 'buyer') return '林若安';
+  return undefined;
+}
+
+function nextPaymentReference(orderNo: string, method?: string) {
+  const channel = method === 'personal' ? 'PERS' : 'CORP';
+  return `PAY-${channel}-${orderNo.replace(/\D/g, '').slice(-10).padStart(10, '0')}`;
+}
+
 export class MockHitbotMiniApiClient implements HitbotMiniApi {
   private session: MiniSession | null = null;
   private categories: Category[] = [...seedCategories];
   private products: Product[] = [...seedProducts];
   private orders: LocalOrderSnapshot[] = [...seedOrders];
+  private quoteRequests: LocalQuoteRequest[] = [...seedQuoteRequests];
+  private handoffs: LocalOsHandoff[] = [...seedOsHandoffs];
   private addresses: AddressProfile[] = [...seedAddressProfiles];
   private invoices: InvoiceProfile[] = [...seedInvoiceProfiles];
+  private submitResultsByClientRequest = new Map<string, SubmitCartResult>();
 
   async loginWithWechat(input: MiniLoginInput): Promise<MiniSession> {
     this.session = {
@@ -225,6 +271,75 @@ export class MockHitbotMiniApiClient implements HitbotMiniApi {
     return this.orders.find((order) => order.orderNo === orderNo) ?? null;
   }
 
+  async listQuoteRequests(): Promise<LocalQuoteRequest[]> {
+    return this.quoteRequests;
+  }
+
+  async provideQuote(requestNo: string): Promise<LocalQuoteRequest | null> {
+    const target = this.quoteRequests.find((request) => request.requestNo === requestNo);
+    if (!target) {
+      throw new Error('QUOTE_REQUEST_NOT_FOUND');
+    }
+    if (target.status !== 'pending-quote') {
+      throw new Error('QUOTE_REQUEST_NOT_PENDING');
+    }
+
+    const updatedAt = new Date().toISOString();
+    const nextRequest: LocalQuoteRequest = {
+      ...target,
+      status: 'quoted',
+      quotedAt: updatedAt,
+      quotedBy: 'HITBOT 商务',
+      estimateCents: quoteEstimateCents(target.lines),
+      note: target.note ?? '含加工、表面处理与随箱附件。',
+      updatedAt,
+    };
+    this.quoteRequests = this.quoteRequests.map((request) =>
+      request.requestNo === requestNo ? nextRequest : request,
+    );
+    return nextRequest;
+  }
+
+  async acceptQuote(requestNo: string): Promise<LocalQuoteRequest | null> {
+    const target = this.quoteRequests.find((request) => request.requestNo === requestNo);
+    if (!target) {
+      throw new Error('QUOTE_REQUEST_NOT_FOUND');
+    }
+    if (target.status !== 'quoted') {
+      throw new Error('QUOTE_REQUEST_NOT_QUOTED');
+    }
+
+    const updatedAt = new Date().toISOString();
+    const nextRequest: LocalQuoteRequest = {
+      ...target,
+      status: 'accepted',
+      updatedAt,
+    };
+    this.quoteRequests = this.quoteRequests.map((request) =>
+      request.requestNo === requestNo ? nextRequest : request,
+    );
+    this.orders = this.orders.map((order) => {
+      if (order.orderNo !== target.orderNo || order.status !== 'pending-quote') return order;
+      const requiresApproval = order.role !== 'admin';
+      const nextStatus = requiresApproval ? 'pending-approval' : 'pending-payment';
+      return {
+        ...order,
+        status: nextStatus,
+        approvalMode: requiresApproval ? approvalModeForRole(order.role) : 'admin-direct',
+        subtotalCents: target.estimateCents ?? order.subtotalCents,
+        approver: nextStatus === 'pending-approval' ? approverForRole(order.role) : undefined,
+        approvedBy: nextStatus === 'pending-payment' ? order.submittedBy : order.approvedBy,
+        approvedAt: nextStatus === 'pending-payment' ? updatedAt : undefined,
+        updatedAt,
+      };
+    });
+    return nextRequest;
+  }
+
+  async listHandoffs(): Promise<LocalOsHandoff[]> {
+    return this.handoffs;
+  }
+
   async listAddresses(): Promise<AddressProfile[]> {
     return this.addresses;
   }
@@ -257,14 +372,41 @@ export class MockHitbotMiniApiClient implements HitbotMiniApi {
     return next;
   }
 
-  async submitCart(input: Omit<SubmitCartInput, 'enterprise'> & { enterprise?: EnterpriseProfile }): Promise<SubmitCartResult> {
-    const enterprise = input.enterprise ?? (this.session?.bound ? this.session.profile : null);
+  async submitCart(input: MiniSubmitCartInput): Promise<SubmitCartResult> {
+    const enterprise = this.session?.bound ? this.session.profile : null;
     if (!enterprise) {
       throw new Error('BIND_ENTERPRISE_REQUIRED');
     }
+    if (input.clientRequestId) {
+      const existingResult = this.submitResultsByClientRequest.get(input.clientRequestId);
+      if (existingResult) return existingResult;
+    }
+
     const result = createOrderFromCart({ ...input, enterprise });
+    const quoteLines = result.order.lines.filter((line) => line.quoteRequired);
+    const quoteRequest: LocalQuoteRequest | undefined = quoteLines.length
+      ? {
+          requestNo: nextQuoteNo(),
+          enterpriseId: enterprise.enterpriseId,
+          companyName: enterprise.companyName,
+          orderNo: result.order.orderNo,
+          projectName: result.order.projectName,
+          lines: quoteLines,
+          submittedBy: enterprise.contactName,
+          submittedAt: result.order.submittedAt,
+          updatedAt: result.order.submittedAt,
+          status: 'pending-quote',
+        }
+      : undefined;
     this.orders = [result.order, ...this.orders];
-    return result;
+    if (quoteRequest) {
+      this.quoteRequests = [quoteRequest, ...this.quoteRequests];
+    }
+    const submitResult = { ...result, quoteRequest };
+    if (input.clientRequestId) {
+      this.submitResultsByClientRequest.set(input.clientRequestId, submitResult);
+    }
+    return submitResult;
   }
 
   async advanceOrder(orderNo: string): Promise<LocalOrderSnapshot | null> {
@@ -279,6 +421,16 @@ export class MockHitbotMiniApiClient implements HitbotMiniApi {
   }
 
   async createPayment(orderNo: string): Promise<PaymentParams> {
+    const order = this.orders.find((item) => item.orderNo === orderNo);
+    if (!order) {
+      throw new Error('ORDER_NOT_FOUND');
+    }
+    if (order.status !== 'pending-payment') {
+      throw new Error('ORDER_PAYMENT_NOT_AVAILABLE');
+    }
+    if ((order.paymentMethod ?? 'corporate') !== 'personal') {
+      throw new Error('ORDER_PAYMENT_REQUIRES_CONFIRMATION');
+    }
     return {
       timeStamp: String(Math.floor(Date.now() / 1000)),
       nonceStr: `mock-${orderNo}`,
@@ -289,6 +441,17 @@ export class MockHitbotMiniApiClient implements HitbotMiniApi {
   }
 
   async confirmPayment(orderNo: string): Promise<LocalOrderSnapshot | null> {
+    const targetOrder = this.orders.find((order) => order.orderNo === orderNo);
+    if (!targetOrder) {
+      throw new Error('ORDER_NOT_FOUND');
+    }
+    if (targetOrder.status !== 'pending-payment') {
+      throw new Error('ORDER_PAYMENT_NOT_AVAILABLE');
+    }
+    if ((targetOrder.paymentMethod ?? 'corporate') !== 'personal') {
+      throw new Error('ORDER_PAYMENT_REQUIRES_CORPORATE_CONFIRMATION');
+    }
+
     let updated: LocalOrderSnapshot | null = null;
     const now = new Date().toISOString();
     this.orders = this.orders.map((order) => {
@@ -297,7 +460,35 @@ export class MockHitbotMiniApiClient implements HitbotMiniApi {
         ...order,
         paidAt: order.paidAt ?? now,
         paidBy: this.session?.profile?.contactName ?? defaultProfile.contactName,
-        paymentReference: order.paymentReference ?? `WX-MOCK-${orderNo.slice(-8)}`,
+        paymentReference: order.paymentReference ?? nextPaymentReference(orderNo, order.paymentMethod),
+      });
+      updated = nextOrder;
+      return nextOrder;
+    });
+    return updated;
+  }
+
+  async confirmCorporatePayment(orderNo: string): Promise<LocalOrderSnapshot | null> {
+    const targetOrder = this.orders.find((order) => order.orderNo === orderNo);
+    if (!targetOrder) {
+      throw new Error('ORDER_NOT_FOUND');
+    }
+    if (targetOrder.status !== 'pending-payment') {
+      throw new Error('ORDER_PAYMENT_NOT_AVAILABLE');
+    }
+    if ((targetOrder.paymentMethod ?? 'corporate') !== 'corporate') {
+      throw new Error('ORDER_PAYMENT_REQUIRES_PERSONAL_PAYMENT');
+    }
+
+    let updated: LocalOrderSnapshot | null = null;
+    const now = new Date().toISOString();
+    this.orders = this.orders.map((order) => {
+      if (order.orderNo !== orderNo) return order;
+      const nextOrder = advanceOrderAction({
+        ...order,
+        paidAt: order.paidAt ?? now,
+        paidBy: this.session?.profile?.contactName ?? defaultProfile.contactName,
+        paymentReference: order.paymentReference ?? nextPaymentReference(orderNo, order.paymentMethod),
       });
       updated = nextOrder;
       return nextOrder;
@@ -310,6 +501,8 @@ export class MockHitbotMiniApiClient implements HitbotMiniApi {
     this.categories = [...seedCategories];
     this.products = [...seedProducts];
     this.orders = snapshot.orders;
+    this.quoteRequests = snapshot.quoteRequests;
+    this.handoffs = snapshot.handoffs;
     this.addresses = snapshot.addresses;
     this.invoices = snapshot.invoices;
   }
@@ -320,6 +513,8 @@ export class MockHitbotMiniApiClient implements HitbotMiniApi {
       categories: this.categories,
       products: this.products,
       orders: this.orders,
+      quoteRequests: this.quoteRequests,
+      handoffs: this.handoffs,
       addresses: this.addresses,
       invoices: this.invoices,
     };
@@ -404,6 +599,36 @@ export class HttpHitbotMiniApiClient implements HitbotMiniApi {
     });
   }
 
+  async listQuoteRequests(): Promise<LocalQuoteRequest[]> {
+    return this.transport.request<LocalQuoteRequest[]>({
+      path: '/mini/quotes',
+      token: this.session?.token,
+    });
+  }
+
+  async provideQuote(requestNo: string): Promise<LocalQuoteRequest | null> {
+    return this.transport.request<LocalQuoteRequest | null>({
+      method: 'POST',
+      path: `/mini/quotes/${encodeURIComponent(requestNo)}/provide`,
+      token: this.session?.token,
+    });
+  }
+
+  async acceptQuote(requestNo: string): Promise<LocalQuoteRequest | null> {
+    return this.transport.request<LocalQuoteRequest | null>({
+      method: 'POST',
+      path: `/mini/quotes/${encodeURIComponent(requestNo)}/accept`,
+      token: this.session?.token,
+    });
+  }
+
+  async listHandoffs(): Promise<LocalOsHandoff[]> {
+    return this.transport.request<LocalOsHandoff[]>({
+      path: '/mini/handoffs',
+      token: this.session?.token,
+    });
+  }
+
   async listAddresses(): Promise<AddressProfile[]> {
     return this.transport.request<AddressProfile[]>({
       path: '/mini/profile/addresses',
@@ -440,7 +665,7 @@ export class HttpHitbotMiniApiClient implements HitbotMiniApi {
     });
   }
 
-  async submitCart(input: Omit<SubmitCartInput, 'enterprise'> & { enterprise?: EnterpriseProfile }): Promise<SubmitCartResult> {
+  async submitCart(input: MiniSubmitCartInput): Promise<SubmitCartResult> {
     return this.transport.request<SubmitCartResult, typeof input>({
       method: 'POST',
       path: '/mini/cart/submit',
@@ -473,6 +698,14 @@ export class HttpHitbotMiniApiClient implements HitbotMiniApi {
     });
   }
 
+  async confirmCorporatePayment(orderNo: string): Promise<LocalOrderSnapshot | null> {
+    return this.transport.request<LocalOrderSnapshot | null>({
+      method: 'POST',
+      path: `/mini/orders/${encodeURIComponent(orderNo)}/confirm-corporate-payment`,
+      token: this.session?.token,
+    });
+  }
+
   hydrate(snapshot: MiniStoreSnapshot) {
     this.session = snapshot.session;
   }
@@ -483,6 +716,8 @@ export class HttpHitbotMiniApiClient implements HitbotMiniApi {
       categories: [],
       products: [],
       orders: [],
+      quoteRequests: [],
+      handoffs: [],
       addresses: [],
       invoices: [],
     };
