@@ -1,13 +1,20 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Taro from '@tarojs/taro';
 import { Button, Input, Text, View } from '@tarojs/components';
 import { useMiniStore } from '@/hooks/use-mini-store';
-import { currentProfile, saveAddressProfile } from '@/services/store';
+import {
+  currentProfile,
+  isEnterpriseBound,
+  saveAddressProfile,
+  selectMiniEnterpriseAddresses,
+} from '@/services/store';
 import './index.scss';
 
 export default function AddressesPage() {
   const appState = useMiniStore();
+  const isBound = isEnterpriseBound(appState);
   const profile = currentProfile();
+  const addresses = useMemo(() => selectMiniEnterpriseAddresses(appState), [appState]);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     label: '新收货地址',
@@ -17,6 +24,20 @@ export default function AddressesPage() {
     city: '深圳市',
     address: '',
   });
+
+  if (!isBound || !profile) {
+    return (
+      <View className="page profile-list-page">
+        <View className="surface empty-profile">
+          <Text className="row-title">尚未登录企业账号</Text>
+          <Text className="row-body">登录后才能维护当前企业的收货地址。</Text>
+          <Button className="primary-button" onClick={() => Taro.switchTab({ url: '/pages/account/index' })}>
+            去登录企业账号
+          </Button>
+        </View>
+      </View>
+    );
+  }
 
   async function submit() {
     if (saving) return;
@@ -41,7 +62,7 @@ export default function AddressesPage() {
   return (
     <View className="page profile-list-page">
       <View className="profile-list">
-        {appState.addresses.map((address) => (
+        {addresses.map((address) => (
           <View key={address.id} className="surface profile-row">
             <View>
               <Text className="row-title">{address.label}</Text>
@@ -51,7 +72,7 @@ export default function AddressesPage() {
             <Text className="tag">常用</Text>
           </View>
         ))}
-        {appState.addresses.length === 0 && (
+        {addresses.length === 0 && (
           <View className="surface empty-profile">
             <Text className="row-title">暂无收货地址</Text>
             <Text className="row-body">新增地址后，提交购物车时可以直接选择。</Text>

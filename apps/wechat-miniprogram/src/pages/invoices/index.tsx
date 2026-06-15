@@ -1,13 +1,20 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Taro from '@tarojs/taro';
 import { Button, Input, Text, View } from '@tarojs/components';
 import { useMiniStore } from '@/hooks/use-mini-store';
-import { currentProfile, saveInvoiceProfile } from '@/services/store';
+import {
+  currentProfile,
+  isEnterpriseBound,
+  saveInvoiceProfile,
+  selectMiniEnterpriseInvoices,
+} from '@/services/store';
 import '../addresses/index.scss';
 
 export default function InvoicesPage() {
   const appState = useMiniStore();
+  const isBound = isEnterpriseBound(appState);
   const profile = currentProfile();
+  const invoices = useMemo(() => selectMiniEnterpriseInvoices(appState), [appState]);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     label: '新发票抬头',
@@ -15,6 +22,20 @@ export default function InvoicesPage() {
     taxId: '',
     bankAccount: '',
   });
+
+  if (!isBound || !profile) {
+    return (
+      <View className="page profile-list-page">
+        <View className="surface empty-profile">
+          <Text className="row-title">尚未登录企业账号</Text>
+          <Text className="row-body">登录后才能维护当前企业的发票抬头。</Text>
+          <Button className="primary-button" onClick={() => Taro.switchTab({ url: '/pages/account/index' })}>
+            去登录企业账号
+          </Button>
+        </View>
+      </View>
+    );
+  }
 
   async function submit() {
     if (saving) return;
@@ -39,7 +60,7 @@ export default function InvoicesPage() {
   return (
     <View className="page profile-list-page">
       <View className="profile-list">
-        {appState.invoices.map((invoice) => (
+        {invoices.map((invoice) => (
           <View key={invoice.id} className="surface profile-row">
             <View>
               <Text className="row-title">{invoice.label}</Text>
@@ -50,7 +71,7 @@ export default function InvoicesPage() {
             <Text className="tag tag-red">对公</Text>
           </View>
         ))}
-        {appState.invoices.length === 0 && (
+        {invoices.length === 0 && (
           <View className="surface empty-profile">
             <Text className="row-title">暂无发票抬头</Text>
             <Text className="row-body">新增后可在提交购物车时选择。</Text>

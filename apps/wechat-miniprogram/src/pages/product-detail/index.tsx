@@ -11,6 +11,7 @@ import {
 import {
   addProductToActiveCart,
   findProduct,
+  isEnterpriseBound,
   loadCatalog,
   relatedProducts,
   setActiveProject,
@@ -27,6 +28,7 @@ export default function ProductDetailPage() {
   const isOutOfStock = product?.stock === 'out-of-stock';
   const category = product ? appState.categories.find((item) => item.id === product.category) : null;
   const related = useMemo(() => (product ? relatedProducts(product.id).slice(0, 3) : []), [product]);
+  const enterpriseBound = isEnterpriseBound(appState);
 
   useEffect(() => {
     loadCatalog().catch(() => {
@@ -38,6 +40,11 @@ export default function ProductDetailPage() {
     if (!product) return;
     if (isOutOfStock) {
       Taro.showToast({ title: '当前缺货，请联系销售', icon: 'none' });
+      return;
+    }
+    if (!enterpriseBound) {
+      Taro.showToast({ title: '请先登录企业账号', icon: 'none' });
+      Taro.switchTab({ url: '/pages/account/index' });
       return;
     }
     setActiveProject('web');

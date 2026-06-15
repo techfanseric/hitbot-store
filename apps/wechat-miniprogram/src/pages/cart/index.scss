@@ -20,10 +20,10 @@
 
   .cart-progress {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 2px;
     width: calc(var(--cart-capsule-left, 288px) - 34px);
-    max-width: 260px;
+    max-width: 292px;
     height: var(--cart-capsule-height, 32px);
     padding: 3px;
     border: 1px solid #dedee1;
@@ -105,10 +105,10 @@
     min-height: 24px;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 3px;
     color: #777777;
     background: transparent;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
     border-radius: 999px;
 
@@ -121,8 +121,8 @@
 
   .step-dot {
     display: flex;
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
     align-items: center;
     justify-content: center;
     border-radius: 999px;
@@ -449,6 +449,61 @@
     color: #1a1a1a;
     font-size: 22px;
     font-weight: 900;
+  }
+
+  .review-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .review-row {
+    display: grid;
+    grid-template-columns: 68px minmax(0, 1fr) 24px;
+    gap: 8px;
+    min-height: 42px;
+    align-items: center;
+    padding: 9px 10px;
+    border: 1px solid #ebebeb;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  .review-row.ok {
+    border-color: rgba(189, 28, 34, 0.12);
+  }
+
+  .review-label {
+    color: #777777;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .review-value {
+    overflow: hidden;
+    color: #1a1a1a;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .review-state {
+    display: flex;
+    width: 22px;
+    height: 22px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    color: #bd1c22;
+    background: rgba(189, 28, 34, 0.1);
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .review-row.ok .review-state {
+    color: #ffffff;
+    background: #bd1c22;
   }
 
   .note-field {

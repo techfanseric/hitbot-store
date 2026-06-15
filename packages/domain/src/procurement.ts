@@ -1,5 +1,6 @@
 import { getProductById } from './products';
 import type {
+  ApprovalMode,
   CartItem,
   LocalOrderSnapshot,
   OrderLineSnapshot,
@@ -34,6 +35,7 @@ export function cartItemsToOrderLines(items: CartItem[]): OrderLineSnapshot[] {
         partClass: item.partClass,
         qty: item.qty,
         source: item.source,
+        selected: item.selected,
         sellable: item.sellable,
         quoteRequired: item.quoteRequired,
         unitPriceCents: product.priceCents,
@@ -46,17 +48,25 @@ export function cartItemsToOrderLines(items: CartItem[]): OrderLineSnapshot[] {
 
 export function createOrderFromCart(input: SubmitCartInput): SubmitCartResult {
   const lines = cartItemsToOrderLines(input.items);
-  const hasQuoteItems = lines.some((line) => line.quoteRequired);
+  const quoteLines = lines.filter((line) => line.quoteRequired);
+  const billableLines = lines.filter((line) => line.sellable);
+  const hasQuoteItems = quoteLines.length > 0;
+  const quoteOnlyOrder = hasQuoteItems && billableLines.length === 0;
   const subtotalCents = lines.reduce((sum, line) => sum + line.subtotalCents, 0);
   const now = new Date().toISOString();
-  const status: OrderStatus =
-    input.enterprise.role === 'engineer'
-      ? 'pending-approval'
-      : hasQuoteItems && subtotalCents === 0
-        ? 'pending-quote'
-        : input.enterprise.role === 'admin'
-          ? 'pending-payment'
-          : 'pending-approval';
+  const requiresApproval = input.enterprise.role !== 'admin' && !quoteOnlyOrder;
+  const approvalMode: ApprovalMode = requiresApproval
+    ? input.enterprise.role === 'buyer'
+      ? 'admin-review'
+      : 'buyer-review'
+    : input.enterprise.role === 'admin'
+      ? 'admin-direct'
+      : 'not-required';
+  const status: OrderStatus = quoteOnlyOrder
+    ? 'pending-quote'
+    : !requiresApproval
+      ? 'pending-payment'
+      : 'pending-approval';
   const order: LocalOrderSnapshot = {
     orderNo: nextOrderNo(new Date(now)),
     enterpriseId: input.enterprise.enterpriseId,
@@ -64,8 +74,14 @@ export function createOrderFromCart(input: SubmitCartInput): SubmitCartResult {
     projectId: input.projectId,
     projectName: input.projectName,
     role: input.enterprise.role,
+    approvalMode,
     submittedBy: input.enterprise.contactName,
-    approver: input.enterprise.role === 'admin' ? input.enterprise.contactName : '林若安',
+    approver: status === 'pending-approval' ? '林若安' : undefined,
+    approvedBy:
+      status === 'pending-payment' && input.enterprise.role === 'admin'
+        ? input.enterprise.contactName
+        : undefined,
+    approvedAt: status === 'pending-payment' && input.enterprise.role === 'admin' ? now : undefined,
     paymentMethod: input.paymentMethod ?? 'corporate',
     lines,
     subtotalCents,

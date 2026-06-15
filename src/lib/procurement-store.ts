@@ -476,7 +476,7 @@ const defaultOsHandoffs: LocalOsHandoff[] = [
     enterpriseId: defaultProfile.enterpriseId,
     companyName: defaultProfile.companyName,
     projectId: 'end-effector-05',
-    projectName: '末端执行器备件清单',
+    projectName: '末端执行器备件补充',
     itemCount: 6,
     submittedBy: MOCK_ENGINEER_NAME,
     submittedAt: '2026-06-05T03:20:00.000Z',

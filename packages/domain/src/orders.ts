@@ -1,4 +1,5 @@
-import type { EnterpriseProfile, LocalOrderSnapshot } from './types';
+import { getProductById } from './products';
+import type { EnterpriseProfile, LocalOrderSnapshot, OrderLineSnapshot } from './types';
 
 export const defaultProfile: EnterpriseProfile = {
   enterpriseId: 'ENT-HITBOT-CUSTOMER',
@@ -7,7 +8,35 @@ export const defaultProfile: EnterpriseProfile = {
   contactName: '陈思远',
   phone: '15507540989',
   email: 'buyer@customer.example',
+  signedInAt: null,
 };
+
+function orderLine(
+  productId: string,
+  qty: number,
+  options: Partial<
+    Pick<OrderLineSnapshot, 'partClass' | 'source' | 'sellable' | 'quoteRequired'>
+  > = {},
+): OrderLineSnapshot {
+  const product = getProductById(productId);
+  if (!product) throw new Error(`Unknown product id: ${productId}`);
+
+  const sellable = options.sellable ?? product.partClass === 'standard';
+  return {
+    productId: product.id,
+    model: product.model,
+    name: product.name,
+    partClass: options.partClass ?? product.partClass,
+    qty,
+    source: options.source,
+    selected: true,
+    sellable,
+    quoteRequired: options.quoteRequired ?? !sellable,
+    unitPriceCents: product.priceCents,
+    subtotalCents: sellable ? product.priceCents * qty : 0,
+    currency: product.currency,
+  };
+}
 
 export const orders: LocalOrderSnapshot[] = [
   {
@@ -20,34 +49,7 @@ export const orders: LocalOrderSnapshot[] = [
     submittedBy: '周亦辰',
     approver: '林若安',
     paymentMethod: 'corporate',
-    lines: [
-      {
-        productId: 'p-004',
-        model: 'Z-Arm S622',
-        name: { zh: 'Z-Arm S622 四轴机械臂', en: 'Z-Arm S622 SCARA Robot' },
-        partClass: 'standard',
-        qty: 2,
-        source: 'os',
-        sellable: true,
-        quoteRequired: false,
-        unitPriceCents: 1800000,
-        subtotalCents: 3600000,
-        currency: 'CNY',
-      },
-      {
-        productId: 'p-002',
-        model: 'Z-EFG-8S',
-        name: { zh: 'Z-EFG-8S 电动夹爪', en: 'Z-EFG-8S Electric Gripper' },
-        partClass: 'standard',
-        qty: 2,
-        source: 'os',
-        sellable: true,
-        quoteRequired: false,
-        unitPriceCents: 320000,
-        subtotalCents: 640000,
-        currency: 'CNY',
-      },
-    ],
+    lines: [orderLine('p-004', 2, { source: 'os' }), orderLine('p-002', 2, { source: 'os' })],
     subtotalCents: 4240000,
     itemCount: 4,
     submittedAt: '2026-06-01T01:30:00.000Z',
@@ -64,20 +66,7 @@ export const orders: LocalOrderSnapshot[] = [
     submittedBy: defaultProfile.contactName,
     approver: '林若安',
     paymentMethod: 'corporate',
-    lines: [
-      {
-        productId: 'p-008',
-        model: 'Z-Mod-SE-54',
-        name: { zh: 'Z-Mod-SE-54 末端模块', en: 'Z-Mod-SE-54 End Module' },
-        partClass: 'standard',
-        qty: 2,
-        sellable: true,
-        quoteRequired: false,
-        unitPriceCents: 580000,
-        subtotalCents: 1160000,
-        currency: 'CNY',
-      },
-    ],
+    lines: [orderLine('p-008', 2)],
     subtotalCents: 1160000,
     itemCount: 2,
     submittedAt: '2026-06-02T06:30:18.000Z',
@@ -94,19 +83,12 @@ export const orders: LocalOrderSnapshot[] = [
     submittedBy: '周亦辰',
     paymentMethod: 'corporate',
     lines: [
-      {
-        productId: 'p-010',
-        model: 'Custom-Frame-A1',
-        name: { zh: '定制工装框架 A1', en: 'Custom Fixture Frame A1' },
+      orderLine('p-010', 1, {
         partClass: 'custom',
-        qty: 1,
         source: 'os',
         sellable: false,
         quoteRequired: true,
-        unitPriceCents: 0,
-        subtotalCents: 0,
-        currency: 'CNY',
-      },
+      }),
     ],
     subtotalCents: 0,
     itemCount: 1,

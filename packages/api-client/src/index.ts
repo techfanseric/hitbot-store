@@ -31,8 +31,15 @@ export interface MiniLoginInput {
 }
 
 export interface BindEnterpriseInput {
-  phone: string;
+  phone?: string;
   inviteCode?: string;
+  account?: string;
+  password?: string;
+}
+
+export interface EnterpriseMemberLoginInput {
+  account: string;
+  password: string;
 }
 
 export interface MiniStoreSnapshot {
@@ -65,6 +72,7 @@ export interface ApiTransport {
 
 export interface HitbotMiniApi {
   loginWithWechat(input: MiniLoginInput): Promise<MiniSession>;
+  loginEnterpriseMember(input: EnterpriseMemberLoginInput): Promise<MiniSession>;
   bindEnterprise(input: BindEnterpriseInput): Promise<MiniSession>;
   getSession(): Promise<MiniSession | null>;
   listCategories(): Promise<Category[]>;
@@ -88,6 +96,72 @@ function createToken(seed: string) {
   return `mock-token-${seed || Date.now()}`;
 }
 
+const rememberedMiniMembers: EnterpriseProfile[] = [
+  {
+    ...defaultProfile,
+    contactName: '林若安',
+    email: 'admin@customer.example',
+    phone: '15507540989',
+    role: 'admin',
+  },
+  {
+    ...defaultProfile,
+    contactName: '陈思远',
+    email: 'buyer@customer.example',
+    phone: '15507540989',
+    role: 'buyer',
+  },
+  {
+    ...defaultProfile,
+    contactName: '周亦辰',
+    email: 'engineer@customer.example',
+    phone: '17701551867',
+    role: 'engineer',
+  },
+];
+
+function normalizeLoginText(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function normalizePhone(value: string) {
+  return value.replace(/\D/g, '');
+}
+
+function resolveRememberedMiniMember(account: string) {
+  const normalizedAccount = normalizeLoginText(account);
+  const exactMember = rememberedMiniMembers.find(
+    (member) =>
+      normalizeLoginText(member.email) === normalizedAccount ||
+      normalizeLoginText(member.contactName) === normalizedAccount,
+  );
+  if (exactMember) return exactMember;
+
+  const normalizedPhone = normalizePhone(account);
+  if (!normalizedPhone) return null;
+
+  const phoneMatches = rememberedMiniMembers.filter(
+    (member) => normalizePhone(member.phone) === normalizedPhone,
+  );
+  return phoneMatches.find((member) => member.role === 'buyer') ?? phoneMatches[0] ?? null;
+}
+
+function createEnterpriseMemberSession(
+  currentSession: MiniSession | null,
+  profile: EnterpriseProfile,
+  tokenSeed: string,
+): MiniSession {
+  return {
+    token: currentSession?.token ?? createToken(tokenSeed),
+    openId: currentSession?.openId ?? `mock-openid-${tokenSeed || 'dev'}`,
+    profile: {
+      ...profile,
+      signedInAt: new Date().toISOString(),
+    },
+    bound: true,
+  };
+}
+
 export class MockHitbotMiniApiClient implements HitbotMiniApi {
   private session: MiniSession | null = null;
   private categories: Category[] = [...seedCategories];
@@ -106,19 +180,25 @@ export class MockHitbotMiniApiClient implements HitbotMiniApi {
     return this.session;
   }
 
-  async bindEnterprise(input: BindEnterpriseInput): Promise<MiniSession> {
-    const profile: EnterpriseProfile = {
-      ...defaultProfile,
-      phone: input.phone || defaultProfile.phone,
-      role: input.inviteCode?.toLowerCase().includes('engineer') ? 'engineer' : defaultProfile.role,
-    };
-    this.session = {
-      token: this.session?.token ?? createToken(input.phone),
-      openId: this.session?.openId ?? `mock-openid-${input.phone || 'dev'}`,
-      profile,
-      bound: true,
-    };
+  async loginEnterpriseMember(input: EnterpriseMemberLoginInput): Promise<MiniSession> {
+    if (!input.password.trim()) {
+      throw new Error('MINI_ENTERPRISE_MEMBER_PASSWORD_REQUIRED');
+    }
+
+    const profile = resolveRememberedMiniMember(input.account);
+    if (!profile) {
+      throw new Error('MINI_ENTERPRISE_MEMBER_NOT_FOUND');
+    }
+
+    this.session = createEnterpriseMemberSession(this.session, profile, input.account);
     return this.session;
+  }
+
+  async bindEnterprise(input: BindEnterpriseInput): Promise<MiniSession> {
+    return this.loginEnterpriseMember({
+      account: input.account ?? input.phone ?? '',
+      password: input.password ?? input.inviteCode ?? '',
+    });
   }
 
   async getSession(): Promise<MiniSession | null> {
@@ -178,7 +258,10 @@ export class MockHitbotMiniApiClient implements HitbotMiniApi {
   }
 
   async submitCart(input: Omit<SubmitCartInput, 'enterprise'> & { enterprise?: EnterpriseProfile }): Promise<SubmitCartResult> {
-    const enterprise = input.enterprise ?? this.session?.profile ?? defaultProfile;
+    const enterprise = input.enterprise ?? (this.session?.bound ? this.session.profile : null);
+    if (!enterprise) {
+      throw new Error('BIND_ENTERPRISE_REQUIRED');
+    }
     const result = createOrderFromCart({ ...input, enterprise });
     this.orders = [result.order, ...this.orders];
     return result;
@@ -253,6 +336,16 @@ export class HttpHitbotMiniApiClient implements HitbotMiniApi {
       method: 'POST',
       path: '/mini/auth/wechat-login',
       body: input,
+    });
+    return this.session;
+  }
+
+  async loginEnterpriseMember(input: EnterpriseMemberLoginInput): Promise<MiniSession> {
+    this.session = await this.transport.request<MiniSession, EnterpriseMemberLoginInput>({
+      method: 'POST',
+      path: '/mini/auth/enterprise-member-login',
+      body: input,
+      token: this.session?.token,
     });
     return this.session;
   }

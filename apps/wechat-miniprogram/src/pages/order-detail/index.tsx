@@ -6,35 +6,48 @@ import {
   advanceOrder,
   confirmOrderPayment,
   createOrderPayment,
-  findOrder,
+  findEnterpriseOrder,
+  isEnterpriseBound,
+  resolveMiniOrderAction,
 } from '@/services/store';
 import { useMiniStore } from '@/hooks/use-mini-store';
 import './index.scss';
 
 export default function OrderDetailPage() {
-  useMiniStore();
+  const appState = useMiniStore();
   const [acting, setActing] = useState(false);
   const router = useRouter();
   const orderNo = String(router.params.orderNo ?? '');
-  const order = findOrder(orderNo);
+  const isBound = isEnterpriseBound(appState);
+  const order = findEnterpriseOrder(orderNo, appState);
+  const action = order ? resolveMiniOrderAction(order, appState) : null;
 
   async function handleAction() {
     if (!order) return;
+    if (!action?.canAct) {
+      Taro.showToast({ title: action?.lockedReason || '当前角色无权限', icon: 'none' });
+      return;
+    }
+
     setActing(true);
     try {
-      if (order.status === 'pending-payment') {
+      if (action.actionKind === 'pay') {
         const params = await createOrderPayment(order.orderNo);
-        await Taro.requestPayment(params as Parameters<typeof Taro.requestPayment>[0]);
+        if (!isMockPayment(params)) {
+          await Taro.requestPayment(params as Parameters<typeof Taro.requestPayment>[0]);
+        }
         await confirmOrderPayment(order.orderNo);
         Taro.showToast({ title: '付款成功', icon: 'success' });
         return;
       }
 
-      await advanceOrder(order.orderNo);
-      Taro.showToast({ title: '状态已更新', icon: 'success' });
+      if (action.actionKind === 'approve' || action.actionKind === 'receive') {
+        await advanceOrder(order.orderNo);
+        Taro.showToast({ title: `${action.actionLabel}成功`, icon: 'success' });
+      }
     } catch {
       Taro.showToast({
-        title: order.status === 'pending-payment' ? '支付未完成' : '操作失败',
+        title: action.actionKind === 'pay' ? '支付未完成' : '操作失败',
         icon: 'none',
       });
     } finally {
@@ -57,8 +70,22 @@ export default function OrderDetailPage() {
     ]);
     Taro.setClipboardData({
       data: [header, ...rows].map((row) => row.join(',')).join('\n'),
-      success: () => Taro.showToast({ title: '清单已复制', icon: 'success' }),
+      success: () => Taro.showToast({ title: '物料已复制', icon: 'success' }),
     });
+  }
+
+  if (!isBound) {
+    return (
+      <View className="page order-detail-page">
+        <View className="surface empty-detail">
+          <Text className="title">尚未登录企业账号</Text>
+          <Text className="info-line">登录后才能查看当前企业订单详情和处理待办。</Text>
+          <Button className="primary-button" onClick={() => Taro.switchTab({ url: '/pages/account/index' })}>
+            去登录企业账号
+          </Button>
+        </View>
+      </View>
+    );
   }
 
   if (!order) {
@@ -74,9 +101,9 @@ export default function OrderDetailPage() {
     );
   }
 
-  const canAct = ['pending-quote', 'pending-approval', 'pending-payment', 'paid', 'in-production', 'shipped'].includes(order.status);
+  const canAct = Boolean(action?.canAct);
   const currentStep = statusStep(order.status);
-  const nextActionLabel = actionLabel(order.status);
+  const nextActionLabel = action?.actionLabel ?? '查看详情';
   const statusEvents = [
     { label: '提交', value: order.submittedAt },
     { label: '审批/报价', value: order.approvedAt },
@@ -100,8 +127,11 @@ export default function OrderDetailPage() {
             <Text className="section-title">当前状态</Text>
             <Text className="status-text">{orderStatusLabel(order.status)}</Text>
           </View>
-          <Text className="tag tag-red">{order.role === 'engineer' ? '工程师提交' : '采购提交'}</Text>
+          <Text className="tag tag-red">{roleLabel(order.role)}提交</Text>
         </View>
+        <Text className={canAct ? 'permission-line ready' : 'permission-line'}>
+          {canAct ? `${action?.ownerLabel ?? '你的待办'}：${nextActionLabel}` : action?.lockedReason}
+        </Text>
         <View className="timeline">
           {['提交', '审批/报价', '付款', '生产', '交付'].map((step, index) => (
             <View key={step} className="timeline-step">
@@ -114,9 +144,9 @@ export default function OrderDetailPage() {
 
       <View className="surface section">
         <View className="between">
-          <Text className="section-title">物料清单</Text>
+          <Text className="section-title">物料明细</Text>
           <Button className="text-button" onClick={copyBom}>
-            复制清单
+            复制物料
           </Button>
         </View>
         {order.lines.map((line) => (
@@ -202,14 +232,14 @@ function statusStep(status: OrderStatus) {
   }[status];
 }
 
-function actionLabel(status: OrderStatus) {
+function isMockPayment(params: { package?: string }) {
+  return params.package?.includes('mock-prepay') ?? false;
+}
+
+function roleLabel(role: string) {
   return {
-    'pending-quote': '确认报价',
-    'pending-approval': '审批通过',
-    'pending-payment': '立即支付',
-    paid: '开始生产',
-    'in-production': '确认发货',
-    shipped: '确认收货',
-    completed: '已完成',
-  }[status];
+    admin: '管理员',
+    buyer: '采购',
+    engineer: '工程师',
+  }[role] ?? role;
 }

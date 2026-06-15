@@ -43,16 +43,23 @@ export interface Product {
   currency: Currency;
   stock: Stock;
   image?: string;
+  images: string[];
   specs: ProductSpec[];
   selection?: ProductSelection;
   accessoryProductIds?: string[];
   description: LocalizedString;
+  seoDescription?: LocalizedString;
+  legacyUrls?: string[];
   featured: boolean;
+  publishedAt: string;
 }
 
 export interface Category {
   id: ProductCategory;
+  slug: string;
   name: LocalizedString;
+  icon: string;
+  count: number;
 }
 
 export type CartSource = 'web' | 'os';
@@ -80,8 +87,25 @@ export interface CartProject {
   updatedAt: number;
 }
 
+export interface OsBomItemInput {
+  productId: string;
+  qty: number;
+  partClass: PartClass;
+  sellable?: boolean;
+  selected?: boolean;
+  quoteRequired?: boolean;
+}
+
+export interface OsBomImportInput {
+  projectId: string;
+  projectName: string;
+  items: OsBomItemInput[];
+  replace?: boolean;
+}
+
 export type EnterpriseRole = 'admin' | 'buyer' | 'engineer';
 export type PaymentMethod = 'corporate' | 'personal';
+export type ApprovalMode = 'buyer-review' | 'admin-review' | 'admin-direct' | 'not-required';
 export type OrderStatus =
   | 'pending-quote'
   | 'pending-approval'
@@ -90,6 +114,8 @@ export type OrderStatus =
   | 'in-production'
   | 'shipped'
   | 'completed';
+export type QuoteStatus = 'pending-quote' | 'quoted' | 'accepted';
+export type OsHandoffStatus = 'pending' | 'accepted' | 'submitted';
 
 export interface EnterpriseProfile {
   enterpriseId: string;
@@ -98,29 +124,51 @@ export interface EnterpriseProfile {
   contactName: string;
   phone: string;
   email: string;
+  signedInAt?: string | null;
 }
 
-export interface AddressProfile {
-  id: string;
-  enterpriseId?: string;
-  companyName?: string;
-  label: string;
+export interface CheckoutDraft {
   recipient: string;
   phone: string;
   province: string;
   city: string;
   address: string;
-  updatedAt: string;
+  paymentMethod: PaymentMethod;
+  invoiceTitle: string;
+  taxId: string;
+  bankAccount: string;
+  approvalMode: ApprovalMode;
+  approver: string;
+  note: string;
 }
 
-export interface InvoiceProfile {
+export interface OrderAddressSnapshot {
+  recipient: string;
+  phone: string;
+  province: string;
+  city: string;
+  address: string;
+}
+
+export interface OrderInvoiceSnapshot {
+  title: string;
+  taxId: string;
+  bankAccount: string;
+}
+
+export interface AddressProfile extends OrderAddressSnapshot {
   id: string;
   enterpriseId?: string;
   companyName?: string;
   label: string;
-  title: string;
-  taxId: string;
-  bankAccount: string;
+  updatedAt: string;
+}
+
+export interface InvoiceProfile extends OrderInvoiceSnapshot {
+  id: string;
+  enterpriseId?: string;
+  companyName?: string;
+  label: string;
   updatedAt: string;
 }
 
@@ -131,6 +179,7 @@ export interface OrderLineSnapshot {
   partClass: PartClass;
   qty: number;
   source?: CartSource;
+  selected?: boolean;
   sellable?: boolean;
   quoteRequired?: boolean;
   unitPriceCents: number;
@@ -144,16 +193,20 @@ export interface LocalOrderSnapshot {
   companyName?: string;
   projectId?: string;
   projectName: string;
+  handoffId?: string;
   role: EnterpriseRole;
+  approvalMode?: ApprovalMode;
   submittedBy?: string;
+  approver?: string;
+  approvedBy?: string;
+  paymentMethod?: PaymentMethod;
   lines: OrderLineSnapshot[];
+  shippingAddress?: OrderAddressSnapshot;
+  invoice?: OrderInvoiceSnapshot | null;
+  note?: string;
   subtotalCents: number;
   itemCount: number;
   submittedAt: string;
-  updatedAt?: string;
-  status: OrderStatus;
-  paymentMethod?: PaymentMethod;
-  approver?: string;
   approvedAt?: string;
   paidAt?: string;
   paidBy?: string;
@@ -163,9 +216,42 @@ export interface LocalOrderSnapshot {
   completedAt?: string;
   carrier?: string;
   trackingNo?: string;
-  shippingAddress?: Pick<AddressProfile, 'recipient' | 'phone' | 'province' | 'city' | 'address'>;
-  invoice?: Pick<InvoiceProfile, 'title' | 'taxId' | 'bankAccount'> | null;
+  updatedAt?: string;
+  status: OrderStatus;
+}
+
+export interface LocalOsHandoff {
+  id: string;
+  enterpriseId?: string;
+  companyName?: string;
+  projectId: string;
+  projectName: string;
+  itemCount: number;
+  submittedBy?: string;
+  submittedAt: string;
+  acceptedBy?: string;
+  acceptedAt?: string;
+  submittedOrderNo?: string;
+  orderSubmittedAt?: string;
+  updatedAt: string;
+  status: OsHandoffStatus;
+}
+
+export interface LocalQuoteRequest {
+  requestNo: string;
+  enterpriseId?: string;
+  companyName?: string;
+  orderNo: string;
+  projectName: string;
+  lines: OrderLineSnapshot[];
+  submittedBy?: string;
+  submittedAt: string;
+  quotedAt?: string;
+  quotedBy?: string;
+  estimateCents?: number;
   note?: string;
+  updatedAt: string;
+  status: QuoteStatus;
 }
 
 export interface SubmitCartInput {
@@ -174,8 +260,8 @@ export interface SubmitCartInput {
   enterprise: EnterpriseProfile;
   items: CartItem[];
   paymentMethod?: PaymentMethod;
-  shippingAddress?: Pick<AddressProfile, 'recipient' | 'phone' | 'province' | 'city' | 'address'>;
-  invoice?: Pick<InvoiceProfile, 'title' | 'taxId' | 'bankAccount'> | null;
+  shippingAddress?: OrderAddressSnapshot;
+  invoice?: OrderInvoiceSnapshot | null;
   note?: string;
 }
 

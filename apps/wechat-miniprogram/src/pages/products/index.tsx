@@ -11,7 +11,12 @@ import {
   type ProductCategory,
   type Stock,
 } from '@hitbot/domain';
-import { addProductToActiveCart, loadCatalog, setActiveProject } from '@/services/store';
+import {
+  addProductToActiveCart,
+  isEnterpriseBound,
+  loadCatalog,
+  setActiveProject,
+} from '@/services/store';
 import { useMiniStore } from '@/hooks/use-mini-store';
 import './index.scss';
 
@@ -42,6 +47,11 @@ export default function ProductsPage() {
   const normalizedKeyword = keyword.trim().toLowerCase();
   const categories = appState.categories;
   const products = appState.products;
+  const enterpriseBound = isEnterpriseBound(appState);
+  const categoryNameMap = useMemo(
+    () => new Map(categories.map((category) => [category.id, localized(category.name).toLowerCase()])),
+    [categories],
+  );
   const scopedProducts = useMemo(
     () =>
       products.filter(
@@ -73,12 +83,25 @@ export default function ProductsPage() {
         if (gripForce !== null && (product.selection?.gripForceN ?? 0) < gripForce) return false;
         if (dof !== null && product.selection?.dof !== dof) return false;
         if (!normalizedKeyword) return true;
+        const categoryName = categoryNameMap.get(product.category) ?? '';
         return (
           product.model.toLowerCase().includes(normalizedKeyword) ||
+          categoryName.includes(normalizedKeyword) ||
           localized(product.name).toLowerCase().includes(normalizedKeyword)
         );
       }),
-    [dof, gripForce, normalizedKeyword, partClass, payload, reach, scopedProducts, stock, stroke],
+    [
+      categoryNameMap,
+      dof,
+      gripForce,
+      normalizedKeyword,
+      partClass,
+      payload,
+      reach,
+      scopedProducts,
+      stock,
+      stroke,
+    ],
   );
   const availability = useMemo(
     () => ({
@@ -117,6 +140,16 @@ export default function ProductsPage() {
   }
 
   function addProduct(productId: string, quoteRequired: boolean) {
+    const product = products.find((item) => item.id === productId);
+    if (!enterpriseBound) {
+      Taro.showToast({ title: '请先登录企业账号', icon: 'none' });
+      Taro.switchTab({ url: '/pages/account/index' });
+      return;
+    }
+    if (!product || product.stock === 'out-of-stock') {
+      Taro.showToast({ title: '当前缺货，请联系销售', icon: 'none' });
+      return;
+    }
     setActiveProject('web');
     addProductToActiveCart(productId);
     Taro.showToast({ title: quoteRequired ? '已加入购物车，提交时询价' : '已加入购物车', icon: 'success' });
@@ -307,12 +340,17 @@ export default function ProductsPage() {
                 <Text className="price">{formatPrice(product.priceCents, product.currency)}</Text>
                 <Button
                   className={product.partClass === 'custom' ? 'ghost-button compact' : 'secondary-button compact'}
+                  disabled={product.stock === 'out-of-stock'}
                   onClick={(event) => {
                     event.stopPropagation();
                     addProduct(product.id, product.partClass === 'custom' || product.priceCents === 0);
                   }}
                 >
-                  {product.partClass === 'custom' ? '询价' : '加入购物车'}
+                  {product.stock === 'out-of-stock'
+                    ? '暂不可购'
+                    : product.partClass === 'custom'
+                      ? '询价'
+                      : '加入购物车'}
                 </Button>
               </View>
             </View>

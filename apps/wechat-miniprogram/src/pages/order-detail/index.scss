@@ -21,6 +21,19 @@
     font-weight: 900;
   }
 
+  .permission-line {
+    display: block;
+    color: #8b5b00;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.5;
+    word-break: break-word;
+
+    &.ready {
+      color: #137545;
+    }
+  }
+
   .timeline {
     display: grid;
     grid-template-columns: repeat(5, 1fr);

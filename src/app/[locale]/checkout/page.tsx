@@ -3,8 +3,8 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { CheckoutSummary } from '@/components/store/checkout-summary';
 
 export const metadata: Metadata = {
-  title: '确认商品清单',
-  description: '确认 HITBOT 官方商城商品清单和 OS 项目 BOM，后续接入企业账号、收货地址、付款和发票流程。',
+  title: '确认购物车',
+  description: '确认 HITBOT 官方商城购物车和 OS 项目 BOM，后续接入企业账号、收货地址、付款和发票流程。',
   alternates: {
     canonical: '/store/cart',
   },

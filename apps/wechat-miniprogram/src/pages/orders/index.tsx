@@ -6,6 +6,10 @@ import {
   advanceOrder,
   confirmOrderPayment,
   createOrderPayment,
+  getMiniOrderTodoCounts,
+  isEnterpriseBound,
+  resolveMiniOrderAction,
+  selectMiniEnterpriseOrders,
 } from '@/services/store';
 import { useMiniStore } from '@/hooks/use-mini-store';
 import './index.scss';
@@ -15,11 +19,8 @@ type StatusFilter = 'all' | OrderStatus;
 type TimeFilter = 'all' | '7d' | '30d' | 'month';
 
 const actionableStatuses = new Set([
-  'pending-quote',
   'pending-approval',
   'pending-payment',
-  'paid',
-  'in-production',
   'shipped',
 ]);
 const statusFilters: Array<{ key: StatusFilter; label: string }> = [
@@ -50,7 +51,9 @@ export default function OrdersPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(ORDER_PAGE_SIZE);
   const [actingOrderNo, setActingOrderNo] = useState<string | null>(null);
-  const orders = appState.orders;
+  const isBound = isEnterpriseBound(appState);
+  const orders = useMemo(() => selectMiniEnterpriseOrders(appState), [appState]);
+  const todoCounts = useMemo(() => getMiniOrderTodoCounts(appState), [appState]);
   const projectOptions = useMemo(
     () => ['all', ...Array.from(new Set(orders.map((order) => order.projectName)))],
     [orders],
@@ -58,13 +61,14 @@ export default function OrdersPage() {
   const filteredOrders = useMemo(
     () =>
       orders.filter((order) => {
-        const queueMatch = filter === 'all' || actionableStatuses.has(order.status);
+        const queueMatch =
+          filter === 'all' || resolveMiniOrderAction(order, appState).isTodo;
         const statusMatch = statusFilter === 'all' || order.status === statusFilter;
         const projectMatch = projectFilter === 'all' || order.projectName === projectFilter;
         const timeMatch = matchesTimeFilter(order.submittedAt, timeFilter);
         return queueMatch && statusMatch && projectMatch && timeMatch;
       }),
-    [filter, orders, projectFilter, statusFilter, timeFilter],
+    [appState, filter, orders, projectFilter, statusFilter, timeFilter],
   );
   const allQueueCount = useMemo(
     () =>
@@ -81,11 +85,15 @@ export default function OrdersPage() {
     [filteredOrders, visibleCount],
   );
   const hasMoreOrders = visibleCount < filteredOrders.length;
-  const pendingApproval = orders.filter((order) => order.status === 'pending-approval').length;
-  const pendingPayment = orders.filter((order) => order.status === 'pending-payment').length;
-  const pendingQuote = orders.filter((order) => order.status === 'pending-quote').length;
 
   async function handleAction(orderNo: string, label: string) {
+    const order = orders.find((item) => item.orderNo === orderNo);
+    const action = order ? resolveMiniOrderAction(order, appState) : null;
+    if (!action?.canAct || !['approve', 'receive'].includes(action.actionKind)) {
+      Taro.showToast({ title: action?.lockedReason || '当前角色无权限', icon: 'none' });
+      return;
+    }
+
     setActingOrderNo(orderNo);
     try {
       await advanceOrder(orderNo);
@@ -96,10 +104,19 @@ export default function OrdersPage() {
   }
 
   async function handlePayment(orderNo: string) {
+    const order = orders.find((item) => item.orderNo === orderNo);
+    const action = order ? resolveMiniOrderAction(order, appState) : null;
+    if (!action?.canAct || action.actionKind !== 'pay') {
+      Taro.showToast({ title: action?.lockedReason || '当前角色无权限', icon: 'none' });
+      return;
+    }
+
     setActingOrderNo(orderNo);
     try {
       const params = await createOrderPayment(orderNo);
-      await Taro.requestPayment(params as Parameters<typeof Taro.requestPayment>[0]);
+      if (!isMockPayment(params)) {
+        await Taro.requestPayment(params as Parameters<typeof Taro.requestPayment>[0]);
+      }
       await confirmOrderPayment(orderNo);
       Taro.showToast({ title: '付款成功', icon: 'success' });
     } catch {
@@ -107,18 +124,6 @@ export default function OrdersPage() {
     } finally {
       setActingOrderNo(null);
     }
-  }
-
-  function actionLabel(status: OrderStatus) {
-    return {
-      'pending-quote': '确认报价',
-      'pending-approval': '审批通过',
-      'pending-payment': '立即支付',
-      paid: '开始生产',
-      'in-production': '确认发货',
-      shipped: '确认收货',
-      completed: '查看详情',
-    }[status];
   }
 
   function updateQueueFilter(next: QueueFilter) {
@@ -147,15 +152,30 @@ export default function OrdersPage() {
         <View className="summary-copy">
           <Text className="summary-primary">订单中心</Text>
           <Text className="summary-secondary">
-            待审批 {pendingApproval} · 待付款 {pendingPayment} · 待报价 {pendingQuote}
+            {isBound
+              ? `可审批 ${todoCounts.approval} · 待付款 ${todoCounts.payment} · 待收货 ${todoCounts.receipt}`
+              : '登录企业账号后查看订单待办'}
           </Text>
         </View>
       </View>
 
+      {!isBound && (
+        <View className="surface auth-card">
+          <Text className="project-name">尚未登录企业账号</Text>
+          <Text className="hint">登录后才会加载当前企业订单，并按你的角色显示可处理待办。</Text>
+          <Button className="primary-button" onClick={() => Taro.switchTab({ url: '/pages/account/index' })}>
+            去登录企业账号
+          </Button>
+        </View>
+      )}
+
+      {isBound && (
+        <>
       <View className="list-controls">
         <View className="filter-tabs">
           <Button className={filter === 'todo' ? 'tab active' : 'tab'} onClick={() => updateQueueFilter('todo')}>
             只看待办
+            {todoCounts.total > 0 && <Text className="tab-count">{todoCounts.total}</Text>}
           </Button>
           <Button className={filter === 'all' ? 'tab active' : 'tab'} onClick={() => updateQueueFilter('all')}>
             <Text>全部订单</Text>
@@ -214,7 +234,11 @@ export default function OrdersPage() {
       )}
 
       <View className="order-list">
-        {visibleOrders.map((order) => (
+        {visibleOrders.map((order) => {
+          const action = resolveMiniOrderAction(order, appState);
+          const lockedButtonLabel = order.status === 'completed' ? '查看详情' : action.lockedLabel;
+
+          return (
           <View key={order.orderNo} className="surface order-card">
             <View
               className="order-head"
@@ -235,6 +259,9 @@ export default function OrdersPage() {
               <Text>{order.submittedBy ?? '-'} 提交</Text>
               <Text>{order.itemCount} 件物料</Text>
             </View>
+            <Text className={action.canAct ? 'permission-hint ready' : 'permission-hint'}>
+              {action.canAct ? action.ownerLabel ?? '可处理待办' : action.lockedReason}
+            </Text>
             <View className="order-lines">
               {order.lines.slice(0, 2).map((line) => (
                 <Text key={`${order.orderNo}-${line.productId}`} className="line-text">
@@ -250,7 +277,7 @@ export default function OrdersPage() {
                 <Text className="amount-label">金额</Text>
                 <Text className="order-amount">{formatPrice(order.subtotalCents, 'CNY')}</Text>
               </View>
-              {order.status === 'pending-payment' && (
+              {action.canAct && action.actionKind === 'pay' && (
                 <Button
                   className="primary-button"
                   disabled={actingOrderNo === order.orderNo}
@@ -259,28 +286,29 @@ export default function OrdersPage() {
                   {actingOrderNo === order.orderNo ? '处理中' : '立即支付'}
                 </Button>
               )}
-              {order.status !== 'pending-payment' && actionableStatuses.has(order.status) && (
+              {action.canAct && action.actionKind !== 'pay' && (
                 <Button
-                  className={order.status === 'pending-quote' ? 'ghost-button' : 'primary-button'}
+                  className="primary-button"
                   disabled={actingOrderNo === order.orderNo}
-                  onClick={() => handleAction(order.orderNo, actionLabel(order.status))}
+                  onClick={() => handleAction(order.orderNo, action.actionLabel)}
                 >
-                  {actingOrderNo === order.orderNo ? '处理中' : actionLabel(order.status)}
+                  {actingOrderNo === order.orderNo ? '处理中' : action.actionLabel}
                 </Button>
               )}
-              {!actionableStatuses.has(order.status) && (
+              {!action.canAct && (
                 <Button
                   className="secondary-button"
                   onClick={() =>
                     Taro.navigateTo({ url: `/pages/order-detail/index?orderNo=${order.orderNo}` })
                   }
                 >
-                  查看详情
+                  {lockedButtonLabel}
                 </Button>
               )}
             </View>
           </View>
-        ))}
+          );
+        })}
         {hasMoreOrders && (
           <Button
             className="secondary-button load-more"
@@ -291,11 +319,17 @@ export default function OrdersPage() {
         )}
         {visibleOrders.length === 0 && (
           <View className="surface empty-orders">
-            <Text className="project-name">暂无匹配订单</Text>
-            <Text className="hint">调整状态、项目或时间筛选后再试。</Text>
+            <Text className="project-name">
+              {filter === 'todo' ? '暂无需要你处理的订单' : '暂无匹配订单'}
+            </Text>
+            <Text className="hint">
+              {filter === 'todo' ? '你仍可切换到全部订单查看进度。' : '调整状态、项目或时间筛选后再试。'}
+            </Text>
           </View>
         )}
       </View>
+        </>
+      )}
     </View>
   );
 }
@@ -334,6 +368,10 @@ function matchesTimeFilter(value: string, filter: TimeFilter) {
 
   const days = filter === '7d' ? 7 : 30;
   return now.getTime() - date.getTime() <= days * 24 * 60 * 60 * 1000;
+}
+
+function isMockPayment(params: { package?: string }) {
+  return params.package?.includes('mock-prepay') ?? false;
 }
 
 function getNavMetrics() {

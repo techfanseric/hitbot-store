@@ -60,6 +60,16 @@
     margin-bottom: 10px;
   }
 
+  .auth-card {
+    display: grid;
+    gap: 10px;
+    padding: 16px 14px;
+
+    .primary-button {
+      margin-top: 2px;
+    }
+  }
+
   .filter-tabs {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -264,6 +274,20 @@
     color: #777777;
     font-size: 12px;
     line-height: 1.45;
+  }
+
+  .permission-hint {
+    display: block;
+    margin-top: 8px;
+    color: #8b5b00;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.45;
+    word-break: break-word;
+
+    &.ready {
+      color: #137545;
+    }
   }
 
   .order-lines {

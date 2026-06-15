@@ -1,10 +1,51 @@
 import type { Category } from './types';
 
 export const categories: Category[] = [
-  { id: 'gripper', name: { zh: '电动夹爪', en: 'Electric Grippers' } },
-  { id: 'arm-4axis', name: { zh: '四轴机械臂', en: '4-axis Arms' } },
-  { id: 'arm-6axis', name: { zh: '六轴协作臂', en: '6-axis Arms' } },
-  { id: 'dex-hand', name: { zh: '灵巧手', en: 'Dexterous Hands' } },
-  { id: 'cylinder', name: { zh: '模组/气缸', en: 'Modules' } },
-  { id: 'motor', name: { zh: '末端模组', en: 'End Modules' } },
+  {
+    id: 'gripper',
+    slug: 'gripper',
+    name: { zh: '抓取设备', en: 'Grippers' },
+    icon: 'Hand',
+    count: 0,
+  },
+  {
+    id: 'arm-4axis',
+    slug: 'arm-4axis',
+    name: { zh: '四轴机器臂', en: '4-Axis Arms' },
+    icon: 'Bot',
+    count: 0,
+  },
+  {
+    id: 'arm-6axis',
+    slug: 'arm-6axis',
+    name: { zh: '六轴机器臂', en: '6-Axis Arms' },
+    icon: 'Bot',
+    count: 0,
+  },
+  {
+    id: 'dex-hand',
+    slug: 'dex-hand',
+    name: { zh: '灵巧手', en: 'Dexterous Hands' },
+    icon: 'HandMetal',
+    count: 0,
+  },
+  {
+    id: 'humanoid',
+    slug: 'humanoid',
+    name: { zh: '人形机器人', en: 'Humanoid Robots' },
+    icon: 'PersonStanding',
+    count: 0,
+  },
+  {
+    id: 'cylinder',
+    slug: 'cylinder',
+    name: { zh: '智能电缸', en: 'Electric Cylinders' },
+    icon: 'Cylinder',
+    count: 0,
+  },
+  { id: 'motor', slug: 'motor', name: { zh: '电机', en: 'Motors' }, icon: 'Cpu', count: 0 },
 ];
+
+export function getCategoryById(id: Category['id']) {
+  return categories.find((category) => category.id === id);
+}
