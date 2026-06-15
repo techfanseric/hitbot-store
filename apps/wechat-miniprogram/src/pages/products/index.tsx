@@ -13,11 +13,14 @@ import {
 } from '@hitbot/domain';
 import {
   addProductToActiveCart,
+  getMiniCartProductQuantity,
   isEnterpriseBound,
   loadCatalog,
   setActiveProject,
+  setMiniCartProductQuantity,
 } from '@/services/store';
 import { useMiniStore } from '@/hooks/use-mini-store';
+import { CartQuantityStepper } from '@/components/cart-quantity-stepper';
 import './index.scss';
 
 type ActiveCategory = 'all' | ProductCategory;
@@ -151,7 +154,25 @@ export default function ProductsPage() {
     }
     setActiveProject('web');
     addProductToActiveCart(productId);
-    Taro.showToast({ title: quoteRequired ? '已加入购物车，提交时询价' : '已加入购物车', icon: 'success' });
+    const nextQuantity = getMiniCartProductQuantity(productId);
+    Taro.showToast({
+      title: quoteRequired ? `已加入询价，共${nextQuantity}件` : `已加入，共${nextQuantity}件`,
+      icon: 'success',
+    });
+  }
+
+  function updateProductQuantity(productId: string, quantity: number) {
+    const product = products.find((item) => item.id === productId);
+    if (!enterpriseBound) {
+      Taro.showToast({ title: '请先登录企业账号', icon: 'none' });
+      Taro.switchTab({ url: '/pages/account/index' });
+      return;
+    }
+    if (!product || product.stock === 'out-of-stock') {
+      Taro.showToast({ title: '当前缺货，请联系销售', icon: 'none' });
+      return;
+    }
+    setMiniCartProductQuantity(productId, quantity, 'web');
   }
 
   function clearFilters() {
@@ -314,47 +335,59 @@ export default function ProductsPage() {
       )}
 
       <View className="product-list">
-        {visibleProducts.map((product) => (
-          <View key={product.id} className="surface product-card" onClick={() => openProduct(product.slug)}>
-            <View className={`product-visual visual-${product.category}`}>
-              {product.image ? (
-                <Image className="product-image" src={product.image} mode="aspectFit" />
-              ) : (
-                <Text>{product.model.split(' ')[0]}</Text>
-              )}
-            </View>
-            <View className="product-info">
-              <Text className="model">{product.model}</Text>
-              <Text className="name">{localized(product.name)}</Text>
-              <Text className="desc">{localized(product.description)}</Text>
-              <View className="tag-row">
-                <Text className={product.partClass === 'custom' ? 'tag tag-yellow' : 'tag tag-red'}>
-                  {partClassLabel(product.partClass)}
-                </Text>
-                <Text className={product.stock === 'in-stock' ? 'tag tag-green' : 'tag'}>
-                  {stockLabel(product.stock)}
-                </Text>
+        {visibleProducts.map((product) => {
+          const cartQuantity = getMiniCartProductQuantity(product.id, appState, 'web');
+          const quoteRequired = product.partClass === 'custom' || product.priceCents === 0;
+          return (
+            <View key={product.id} className="surface product-card" onClick={() => openProduct(product.slug)}>
+              <View className={`product-visual visual-${product.category}`}>
+                {product.image ? (
+                  <Image className="product-image" src={product.image} mode="aspectFit" />
+                ) : (
+                  <Text>{product.model.split(' ')[0]}</Text>
+                )}
               </View>
-              <View className="between">
-                <Text className="price">{formatPrice(product.priceCents, product.currency)}</Text>
-                <Button
-                  className={product.partClass === 'custom' ? 'ghost-button compact' : 'secondary-button compact'}
-                  disabled={product.stock === 'out-of-stock'}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    addProduct(product.id, product.partClass === 'custom' || product.priceCents === 0);
-                  }}
-                >
-                  {product.stock === 'out-of-stock'
-                    ? '暂不可购'
-                    : product.partClass === 'custom'
-                      ? '询价'
-                      : '加入购物车'}
-                </Button>
+              <View className="product-info">
+                <Text className="model">{product.model}</Text>
+                <Text className="name">{localized(product.name)}</Text>
+                <Text className="desc">{localized(product.description)}</Text>
+                <View className="tag-row">
+                  <Text className={product.partClass === 'custom' ? 'tag tag-yellow' : 'tag tag-red'}>
+                    {partClassLabel(product.partClass)}
+                  </Text>
+                  <Text className={product.stock === 'in-stock' ? 'tag tag-green' : 'tag'}>
+                    {stockLabel(product.stock)}
+                  </Text>
+                </View>
+                <View className="between">
+                  <Text className="price">{formatPrice(product.priceCents, product.currency)}</Text>
+                  {cartQuantity > 0 ? (
+                    <CartQuantityStepper
+                      value={cartQuantity}
+                      size="compact"
+                      onChange={(quantity) => updateProductQuantity(product.id, quantity)}
+                    />
+                  ) : (
+                    <Button
+                      className={`${quoteRequired ? 'ghost-button' : 'secondary-button'} compact`}
+                      disabled={product.stock === 'out-of-stock'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        addProduct(product.id, quoteRequired);
+                      }}
+                    >
+                      {product.stock === 'out-of-stock'
+                        ? '暂不可购'
+                        : quoteRequired
+                          ? '询价'
+                          : '加入购物车'}
+                    </Button>
+                  )}
+                </View>
               </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
     </View>
   );

@@ -11,12 +11,15 @@ import {
 import {
   addProductToActiveCart,
   findProduct,
+  getMiniCartProductQuantity,
   isEnterpriseBound,
   loadCatalog,
   relatedProducts,
   setActiveProject,
+  setMiniCartProductQuantity,
 } from '@/services/store';
 import { useMiniStore } from '@/hooks/use-mini-store';
+import { CartQuantityStepper } from '@/components/cart-quantity-stepper';
 import './index.scss';
 
 export default function ProductDetailPage() {
@@ -29,6 +32,7 @@ export default function ProductDetailPage() {
   const category = product ? appState.categories.find((item) => item.id === product.category) : null;
   const related = useMemo(() => (product ? relatedProducts(product.id).slice(0, 3) : []), [product]);
   const enterpriseBound = isEnterpriseBound(appState);
+  const cartQuantity = product ? getMiniCartProductQuantity(product.id, appState, 'web') : 0;
 
   useEffect(() => {
     loadCatalog().catch(() => {
@@ -49,11 +53,25 @@ export default function ProductDetailPage() {
     }
     setActiveProject('web');
     addProductToActiveCart(product.id);
+    const nextQuantity = getMiniCartProductQuantity(product.id);
     Taro.showToast({
-      title: isQuote ? '已加入购物车，提交时询价' : '已加入购物车',
+      title: isQuote ? `已加入询价，共${nextQuantity}件` : `已加入，共${nextQuantity}件`,
       icon: 'success',
     });
-    Taro.switchTab({ url: '/pages/cart/index' });
+  }
+
+  function updateProductQuantity(quantity: number) {
+    if (!product) return;
+    if (isOutOfStock) {
+      Taro.showToast({ title: '当前缺货，请联系销售', icon: 'none' });
+      return;
+    }
+    if (!enterpriseBound) {
+      Taro.showToast({ title: '请先登录企业账号', icon: 'none' });
+      Taro.switchTab({ url: '/pages/account/index' });
+      return;
+    }
+    setMiniCartProductQuantity(product.id, quantity, 'web');
   }
 
   if (!product) {
@@ -122,16 +140,22 @@ export default function ProductDetailPage() {
 
       <View className="bottom-bar">
         <View>
-          <Text className="hint">{isQuote ? '提交后由销售报价' : '可加入购物车'}</Text>
+          <Text className={cartQuantity > 0 ? 'hint in-cart' : 'hint'}>
+            {cartQuantity > 0 ? `购物车已有 ${cartQuantity} 件` : isQuote ? '提交后由销售报价' : '可加入购物车'}
+          </Text>
           <Text className="amount">{formatPrice(product.priceCents, product.currency)}</Text>
         </View>
-        <Button
-          className="primary-button"
-          disabled={isOutOfStock}
-          onClick={handleAddToCart}
-        >
-          {isOutOfStock ? '暂不可购' : isQuote ? '提交询价' : '加入购物车'}
-        </Button>
+        {cartQuantity > 0 ? (
+          <CartQuantityStepper value={cartQuantity} onChange={updateProductQuantity} />
+        ) : (
+          <Button
+            className="primary-button"
+            disabled={isOutOfStock}
+            onClick={handleAddToCart}
+          >
+            {isOutOfStock ? '暂不可购' : isQuote ? '提交询价' : '加入购物车'}
+          </Button>
+        )}
       </View>
     </View>
   );

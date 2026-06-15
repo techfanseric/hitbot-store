@@ -376,6 +376,14 @@ export function activeProject() {
   return state.projects[state.activeProjectKey];
 }
 
+export function getMiniCartProductQuantity(
+  productId: string,
+  snapshot: MiniAppState = state,
+  projectKey: keyof MiniAppState['projects'] = 'web',
+) {
+  return snapshot.projects[projectKey].items.find((item) => item.productId === productId)?.qty ?? 0;
+}
+
 export function isCompleteAddress(address?: AddressProfile | null) {
   return Boolean(address?.recipient && address.phone && address.city && address.address);
 }
@@ -521,38 +529,47 @@ export function removeCartItem(productId: string) {
   emit();
 }
 
-export function addProductToActiveCart(productId: string) {
+export function setMiniCartProductQuantity(
+  productId: string,
+  quantity: number,
+  projectKey: MiniAppState['activeProjectKey'] = state.activeProjectKey,
+) {
   const product = state.products.find((item) => item.id === productId);
   if (!product) return null;
   if (product.stock === 'out-of-stock') return null;
 
-  const key = state.activeProjectKey;
-  const project = state.projects[key];
+  const normalizedQuantity = Math.max(0, Math.min(999, Math.floor(quantity)));
+  const project = state.projects[projectKey];
   const existingItem = project.items.find((item) => item.productId === productId);
-  const nextItems = existingItem
-    ? project.items.map((item) =>
-        item.productId === productId
-          ? {
-              ...item,
-              qty: item.qty + 1,
-              selected: true,
-              syncStatus: 'local' as const,
-            }
-          : item,
-      )
-    : [
-        {
-          ...createCartItem(productId, product.partClass),
-          source: project.source,
-        },
-        ...project.items,
-      ];
+  const nextItems =
+    normalizedQuantity === 0
+      ? project.items.filter((item) => item.productId !== productId)
+      : existingItem
+        ? project.items.map((item) =>
+            item.productId === productId
+              ? {
+                  ...item,
+                  qty: normalizedQuantity,
+                  selected: true,
+                  syncStatus: 'local' as const,
+                }
+              : item,
+          )
+        : [
+            {
+              ...createCartItem(productId, product.partClass),
+              qty: normalizedQuantity,
+              source: project.source,
+            },
+            ...project.items,
+          ];
 
   state = {
     ...state,
+    activeProjectKey: projectKey,
     projects: {
       ...state.projects,
-      [key]: {
+      [projectKey]: {
         ...project,
         items: nextItems,
         updatedAt: Date.now(),
@@ -562,6 +579,16 @@ export function addProductToActiveCart(productId: string) {
   persist();
   emit();
   return product;
+}
+
+export function addProductToActiveCart(productId: string) {
+  const product = state.products.find((item) => item.id === productId);
+  if (!product) return null;
+  if (product.stock === 'out-of-stock') return null;
+
+  const key = state.activeProjectKey;
+  const quantity = getMiniCartProductQuantity(productId, state, key);
+  return setMiniCartProductQuantity(productId, quantity + 1, key);
 }
 
 async function getWechatLoginCode() {

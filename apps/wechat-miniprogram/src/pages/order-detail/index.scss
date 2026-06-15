@@ -35,14 +35,35 @@
   }
 
   .timeline {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     gap: 6px;
+    padding-top: 1px;
     color: #777777;
     font-size: 11px;
   }
 
+  .timeline-track {
+    position: absolute;
+    top: 5px;
+    right: 10%;
+    left: 10%;
+    overflow: hidden;
+    height: 2px;
+    border-radius: 999px;
+    background: #d5d5d5;
+  }
+
+  .timeline-track-active {
+    height: 100%;
+    border-radius: inherit;
+    background: #bd1c22;
+  }
+
   .timeline-step {
+    position: relative;
+    z-index: 1;
     display: grid;
     gap: 6px;
     justify-items: center;
@@ -50,8 +71,10 @@
   }
 
   .dot {
+    display: block;
     width: 9px;
     height: 9px;
+    box-shadow: 0 0 0 3px #ffffff;
     border-radius: 999px;
     background: #d5d5d5;
   }

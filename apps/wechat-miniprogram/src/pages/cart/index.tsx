@@ -219,31 +219,33 @@ export default function CartPage() {
         </View>
       </View>
 
-      <View className="surface project-card">
-        <View className="between">
-          <View className="project-line">
-            <Text className="project-label">当前项目：</Text>
-            <Text className="project-name">{project.projectName}</Text>
+      {currentStep === 1 && (
+        <View className="surface project-card">
+          <View className="between">
+            <View className="project-line">
+              <Text className="project-label">当前项目：</Text>
+              <Text className="project-name">{project.projectName}</Text>
+            </View>
+            <Text className={project.source === 'os' ? 'tag tag-red' : 'tag'}>
+              {project.source === 'os' ? '项目同步' : '商城选购'}
+            </Text>
           </View>
-          <Text className={project.source === 'os' ? 'tag tag-red' : 'tag'}>
-            {project.source === 'os' ? '项目同步' : '商城选购'}
-          </Text>
+          <View className="project-switch">
+            <Button
+              className={appState.activeProjectKey === 'os' ? 'switch-chip active' : 'switch-chip'}
+              onClick={() => setActiveProject('os')}
+            >
+              同步项目
+            </Button>
+            <Button
+              className={appState.activeProjectKey === 'web' ? 'switch-chip active' : 'switch-chip'}
+              onClick={() => setActiveProject('web')}
+            >
+              商城购物车
+            </Button>
+          </View>
         </View>
-        <View className="project-switch">
-          <Button
-            className={appState.activeProjectKey === 'os' ? 'switch-chip active' : 'switch-chip'}
-            onClick={() => setActiveProject('os')}
-          >
-            同步项目
-          </Button>
-          <Button
-            className={appState.activeProjectKey === 'web' ? 'switch-chip active' : 'switch-chip'}
-            onClick={() => setActiveProject('web')}
-          >
-            商城购物车
-          </Button>
-        </View>
-      </View>
+      )}
 
       {currentStep === 1 && (
         <View className="cart-list">

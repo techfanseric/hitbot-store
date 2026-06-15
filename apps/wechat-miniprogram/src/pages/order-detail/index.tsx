@@ -113,6 +113,8 @@ export default function OrderDetailPage() {
 
   const canAct = Boolean(action?.canAct);
   const currentStep = statusStep(order.status);
+  const timelineSteps = ['提交', '审批/报价', '付款', '生产', '交付'];
+  const timelineProgress = `${(currentStep / (timelineSteps.length - 1)) * 100}%`;
   const nextActionLabel = action?.actionLabel ?? '查看详情';
   const statusEvents = [
     { label: '提交', value: order.submittedAt },
@@ -143,7 +145,10 @@ export default function OrderDetailPage() {
           {canAct ? `${action?.ownerLabel ?? '你的待办'}：${nextActionLabel}` : action?.lockedReason}
         </Text>
         <View className="timeline">
-          {['提交', '审批/报价', '付款', '生产', '交付'].map((step, index) => (
+          <View className="timeline-track">
+            <View className="timeline-track-active" style={{ width: timelineProgress }} />
+          </View>
+          {timelineSteps.map((step, index) => (
             <View key={step} className="timeline-step">
               <Text className={index <= currentStep ? 'dot active' : 'dot'} />
               <Text>{step}</Text>
