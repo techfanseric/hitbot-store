@@ -120,8 +120,11 @@ export function AccountPanel() {
   const updateApprovalSettings = useAdminStore((state) => state.updateApprovalSettings);
   const {
     isAuthenticated,
+    account,
+    activePurchaseContext,
     profile,
     checkoutDraft,
+    addressBook,
     invoiceProfiles,
     orders,
     quoteRequests,
@@ -177,9 +180,14 @@ export function AccountPanel() {
   const activeMember = useMemo(
     () =>
       isAuthenticated
-        ? members.find((member) => member.email === profile.email && member.status === 'active')
+        ? members.find(
+            (member) =>
+              member.email === profile.email &&
+              member.status === 'active' &&
+              (member.enterpriseId ?? DEFAULT_ENTERPRISE_ID) === profile.enterpriseId,
+          )
         : undefined,
-    [isAuthenticated, members, profile.email],
+    [isAuthenticated, members, profile.email, profile.enterpriseId],
   );
   const enterpriseMembers = useMemo(
     () =>
@@ -308,7 +316,7 @@ export function AccountPanel() {
   );
 
   useEffect(() => {
-    if (!isAuthenticated || !activeMember) return;
+    if (!isAuthenticated || activePurchaseContext?.kind !== 'organization' || !activeMember) return;
 
     const profilePatch: Partial<EnterpriseProfile> = {};
     if (activeMember.enterpriseId && activeMember.enterpriseId !== profile.enterpriseId) {
@@ -327,7 +335,7 @@ export function AccountPanel() {
     if (Object.keys(profilePatch).length > 0) {
       updateProfile(profilePatch);
     }
-  }, [activeMember, isAuthenticated, profile, updateProfile]);
+  }, [activeMember, activePurchaseContext, isAuthenticated, profile, updateProfile]);
 
   function handleAccessRequestSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -480,7 +488,84 @@ export function AccountPanel() {
         </section>
       )}
 
-      {authHydrated && isAuthenticated && (
+      {authHydrated && isAuthenticated && activePurchaseContext?.kind === 'personal' && (
+        <section className="grid gap-4">
+          <div className="bg-bg-elevated overflow-hidden rounded-lg">
+            <div className="bg-brand-soft flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between md:p-6">
+              <div className="flex items-center gap-4">
+                <span className="bg-bg-elevated text-brand-500 flex size-12 shrink-0 items-center justify-center rounded-full shadow-sm">
+                  <UserCog className="size-6" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-text-strong truncate text-xl font-semibold">
+                      {account?.name ?? profile.contactName}
+                    </h2>
+                    <Badge variant="standard">{t('personalBadge')}</Badge>
+                  </div>
+                  <p className="text-text-muted mt-1 truncate text-sm">
+                    {account?.email ?? profile.email}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={signOut}
+                className="text-text-muted hover:bg-bg-elevated hover:text-brand-500 inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-sm transition-colors"
+              >
+                <LogOut className="size-4" />
+                <span>{t('signOut')}</span>
+              </button>
+            </div>
+            <div className="p-5 md:p-6">
+              <h3 className="text-text-strong font-semibold">{t('personalWorkspaceTitle')}</h3>
+              <p className="text-text-muted mt-1.5 max-w-2xl text-sm leading-6">
+                {t('personalWorkspaceHint')}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <PersonalMetric
+              icon={ClipboardCheck}
+              label={t('personalOrders')}
+              value={enterpriseOrders.length}
+            />
+            <PersonalMetric
+              icon={Clock3}
+              label={t('personalPendingPayment')}
+              value={enterpriseOrders.filter((order) => order.status === 'pending-payment').length}
+            />
+            <PersonalMetric
+              icon={ReceiptText}
+              label={t('personalAddresses')}
+              value={
+                addressBook.filter(
+                  (address) =>
+                    (address.enterpriseId ?? DEFAULT_ENTERPRISE_ID) === profile.enterpriseId,
+                ).length
+              }
+            />
+          </div>
+
+          <div className="bg-bg-elevated rounded-lg p-5 md:p-6">
+            <h3 className="text-text-strong font-semibold">{t('personalQuickActions')}</h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <Button asChild variant="primary" className="justify-center">
+                <Link href={`/${locale}/products`}>{t('personalBrowseProducts')}</Link>
+              </Button>
+              <Button asChild variant="secondary" className="justify-center">
+                <Link href={`/${locale}/orders`}>{t('personalViewOrders')}</Link>
+              </Button>
+              <Button asChild variant="secondary" className="justify-center">
+                <Link href={`/${locale}/checkout`}>{t('personalCheckout')}</Link>
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {authHydrated && isAuthenticated && activePurchaseContext?.kind === 'organization' && (
         <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
           <aside className="bg-bg-elevated rounded-lg p-2 lg:sticky lg:top-[124px]">
             <div className="border-divider mb-2 border-b px-2 py-3">
@@ -941,7 +1026,9 @@ export function AccountPanel() {
                                 ? t('approvedBy', { name: order.approvedBy })
                                 : order.approver
                                   ? t('assignedTo', { name: order.approver })
-                                  : t('approvalUnassigned'),
+                                  : order.approvalMode === 'not-required'
+                                    ? t('approvalNotRequiredOwner')
+                                    : t('approvalUnassigned'),
                               payment:
                                 order.status === 'pending-quote'
                                   ? t('quoteEstimate')
@@ -1066,6 +1153,28 @@ export function AccountPanel() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function PersonalMetric({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="bg-bg-elevated flex items-center gap-4 rounded-lg p-5">
+      <span className="bg-bg-control text-brand-500 flex size-10 shrink-0 items-center justify-center rounded-full">
+        <Icon className="size-5" />
+      </span>
+      <div>
+        <p className="text-text-muted text-sm">{label}</p>
+        <p className="text-text-strong mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+      </div>
     </div>
   );
 }

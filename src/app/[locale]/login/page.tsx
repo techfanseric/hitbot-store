@@ -3,8 +3,8 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { LoginPanel } from '@/components/store/login-panel';
 
 export const metadata: Metadata = {
-  title: '登录',
-  description: 'HITBOT 企业账号登录入口。',
+  title: '登录或注册',
+  description: 'HITBOT 商城企业成员登录与个人用户注册入口。',
   alternates: {
     canonical: '/store/login',
   },

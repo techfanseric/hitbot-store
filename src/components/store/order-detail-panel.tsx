@@ -42,8 +42,16 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
   const tAccount = useTranslations('Account');
   const locale = useLocale();
   const authHydrated = useProcurementHydrated();
-  const { isAuthenticated, profile, orders, approveLocalOrder, markLocalOrderPaid, advanceLocalOrder } =
-    useProcurementStore();
+  const {
+    isAuthenticated,
+    activePurchaseContext,
+    profile,
+    orders,
+    approveLocalOrder,
+    markLocalOrderPaid,
+    advanceLocalOrder,
+  } = useProcurementStore();
+  const isPersonalContext = activePurchaseContext?.kind === 'personal';
   const adminMembers = useAdminStore((state) => state.members);
   const approvalSettings = useAdminStore((state) => state.approvalSettings);
   const enterpriseMembers = useMemo(
@@ -186,12 +194,19 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
         canPay={
           isAuthenticated &&
           order.status === 'pending-payment' &&
-          canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'paymentInvoice')
+          (isPersonalContext ||
+            canHandleWorkflowRole(
+              profile,
+              enterpriseApprovalSettings,
+              adminMembers,
+              'paymentInvoice',
+            ))
         }
         canAdvance={
           isAuthenticated &&
           order.status === 'shipped' &&
-          canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'logistics')
+          (isPersonalContext ||
+            canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'logistics'))
         }
         onApprove={() => approveLocalOrder(order.orderNo)}
         onPay={() => markLocalOrderPaid(order.orderNo)}
@@ -207,7 +222,9 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
             ? tAccount('approvedBy', { name: order.approvedBy })
             : order.approver
               ? tAccount('assignedTo', { name: order.approver })
-              : tAccount('approvalUnassigned'),
+              : order.approvalMode === 'not-required'
+                ? tAccount('approvalNotRequiredOwner')
+                : tAccount('approvalUnassigned'),
           payment:
             order.status === 'pending-quote'
               ? tAccount('quoteEstimate')

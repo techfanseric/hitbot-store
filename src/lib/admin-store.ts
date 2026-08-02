@@ -191,6 +191,19 @@ const defaultMembers: AdminMember[] = [
     permissions: defaultPermissionsForRole('engineer'),
     updatedAt: '2026-06-01T00:00:00.000Z',
   },
+  {
+    id: 'member-buyer-maker-lab',
+    enterpriseId: 'ENT-MAKER-LAB',
+    companyName: '湾区创客实验室',
+    name: '陈思远',
+    email: 'buyer@customer.example',
+    phone: '15507540989',
+    role: 'buyer',
+    roleName: '采购负责人',
+    status: 'active',
+    permissions: defaultPermissionsForRole('buyer'),
+    updatedAt: '2026-07-28T00:00:00.000Z',
+  },
 ];
 
 const defaultApprovalSettings: AdminApprovalSettings[] = [
@@ -205,6 +218,18 @@ const defaultApprovalSettings: AdminApprovalSettings[] = [
     requireQuoteOrderApproval: true,
     amountThresholdCents: null,
     updatedAt: '2026-06-01T00:00:00.000Z',
+  },
+  {
+    enterpriseId: 'ENT-MAKER-LAB',
+    defaultApproverMemberId: 'member-buyer-maker-lab',
+    orderReviewerMemberId: 'member-buyer-maker-lab',
+    deliveryOwnerMemberId: 'member-buyer-maker-lab',
+    paymentInvoiceOwnerMemberId: 'member-buyer-maker-lab',
+    logisticsOwnerMemberId: 'member-buyer-maker-lab',
+    requireBuyerOrderApproval: false,
+    requireQuoteOrderApproval: false,
+    amountThresholdCents: null,
+    updatedAt: '2026-07-28T00:00:00.000Z',
   },
 ];
 
@@ -380,8 +405,10 @@ export const useAdminStore = create<AdminState>()(
 
           const timestamp = now();
           const enterpriseId = request.enterpriseId ?? nextEnterpriseId();
-          const existingMember = state.members.find(
-            (member) => member.email.toLowerCase() === request.email.toLowerCase(),
+          const existingMembership = state.members.find(
+            (member) =>
+              member.email.toLowerCase() === request.email.toLowerCase() &&
+              (member.enterpriseId ?? 'ENT-HITBOT-CUSTOMER') === enterpriseId,
           );
           const approvedRequest: AdminEnterpriseAccessRequest = {
             ...request,
@@ -391,7 +418,7 @@ export const useAdminStore = create<AdminState>()(
             enterpriseId,
           };
           const enterpriseAdmin: AdminMember = {
-            id: existingMember?.id ?? `member-enterprise-${Date.now()}`,
+            id: existingMembership?.id ?? `member-enterprise-${Date.now()}`,
             enterpriseId,
             companyName: request.companyName,
             name: request.contactName || request.companyName,
@@ -408,9 +435,9 @@ export const useAdminStore = create<AdminState>()(
             enterpriseAccessRequests: state.enterpriseAccessRequests.map((item) =>
               item.id === requestId ? approvedRequest : item,
             ),
-            members: existingMember
+            members: existingMembership
               ? state.members.map((member) =>
-                  member.id === existingMember.id ? { ...member, ...enterpriseAdmin } : member,
+                  member.id === existingMembership.id ? { ...member, ...enterpriseAdmin } : member,
                 )
               : [...state.members, enterpriseAdmin],
             approvalSettings: state.approvalSettings.some(
@@ -736,44 +763,52 @@ export const useAdminStore = create<AdminState>()(
           ...record,
           ...persistedRecords.find((item) => item.productId === record.productId),
         }));
-        const members = persisted.members?.length
-          ? persisted.members.map((member) => {
-              const defaultMember = defaultMembers.find((item) => item.id === member.id);
-              const approvedAccessRequest = enterpriseAccessRequests.find(
-                (request) =>
-                  request.status === 'approved' &&
-                  request.email.toLowerCase() === member.email.toLowerCase(),
-              );
-
-              const mergedRole = defaultMember?.role ?? member.role;
-              const roleName =
-                member.roleName ??
-                defaultMember?.roleName ??
-                (mergedRole === 'admin' ? '企业管理员' : member.name);
-
-              return {
-                ...member,
-                name: member.name ?? defaultMember?.name,
-                email: member.email ?? defaultMember?.email,
-                role: mergedRole,
-                roleName,
-                status: member.status ?? defaultMember?.status,
-                enterpriseId:
-                  member.enterpriseId ??
-                  approvedAccessRequest?.enterpriseId ??
-                  defaultMember?.enterpriseId ??
-                  'ENT-HITBOT-CUSTOMER',
-                companyName:
-                  defaultMember?.companyName ??
-                  normalizeCompanyName(
-                    member.companyName ?? approvedAccessRequest?.companyName,
-                    '深圳智造装备有限公司',
-                  ),
-                phone: member.phone ?? defaultMember?.phone ?? approvedAccessRequest?.phone,
-                permissions: normalizePermissions(member.permissions ?? defaultMember?.permissions),
-              };
-            })
+        const persistedMembers = persisted.members ?? [];
+        const sourceMembers = persistedMembers.length
+          ? [
+              ...persistedMembers,
+              ...defaultMembers.filter(
+                (defaultMember) =>
+                  !persistedMembers.some((member) => member.id === defaultMember.id),
+              ),
+            ]
           : defaultMembers;
+        const members = sourceMembers.map((member) => {
+          const defaultMember = defaultMembers.find((item) => item.id === member.id);
+          const approvedAccessRequest = enterpriseAccessRequests.find(
+            (request) =>
+              request.status === 'approved' &&
+              request.email.toLowerCase() === member.email.toLowerCase(),
+          );
+
+          const mergedRole = defaultMember?.role ?? member.role;
+          const roleName =
+            member.roleName ??
+            defaultMember?.roleName ??
+            (mergedRole === 'admin' ? '企业管理员' : member.name);
+
+          return {
+            ...member,
+            name: member.name ?? defaultMember?.name,
+            email: member.email ?? defaultMember?.email,
+            role: mergedRole,
+            roleName,
+            status: member.status ?? defaultMember?.status,
+            enterpriseId:
+              member.enterpriseId ??
+              approvedAccessRequest?.enterpriseId ??
+              defaultMember?.enterpriseId ??
+              'ENT-HITBOT-CUSTOMER',
+            companyName:
+              defaultMember?.companyName ??
+              normalizeCompanyName(
+                member.companyName ?? approvedAccessRequest?.companyName,
+                '深圳智造装备有限公司',
+              ),
+            phone: member.phone ?? defaultMember?.phone ?? approvedAccessRequest?.phone,
+            permissions: normalizePermissions(member.permissions ?? defaultMember?.permissions),
+          };
+        });
         const knownEnterpriseIds = Array.from(
           new Set([
             ...members.map((member) => member.enterpriseId).filter(Boolean),

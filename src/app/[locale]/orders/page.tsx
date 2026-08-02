@@ -4,7 +4,7 @@ import { OrderCenter } from '@/components/store/order-center';
 
 export const metadata: Metadata = {
   title: '订单',
-  description: 'HITBOT 官方商城企业订单，查看官网商品订单和 Hitbot OS 来源订单的审批、付款和后续状态。',
+  description: 'HITBOT 官方商城订单，查看个人或企业组织下的付款与履约状态。',
   alternates: {
     canonical: '/store/orders',
   },

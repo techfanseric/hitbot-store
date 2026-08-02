@@ -1,13 +1,36 @@
 'use client';
 
-import { ClipboardCheck, LogIn, LogOut, Menu, User } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  Building2,
+  ChevronRight,
+  ClipboardCheck,
+  LogIn,
+  LogOut,
+  Menu,
+  User,
+} from 'lucide-react';
 import Image from 'next/image';
 import NextLink from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CartBadge } from './cart-badge';
 import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
 import { useProcurementStore } from '@/lib/procurement-store';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface TopNavProps {
   locale: string;
@@ -32,16 +55,37 @@ export function TopNav({ locale }: TopNavProps) {
   const t = useTranslations('Nav');
   const tAccount = useTranslations('Account');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [compactAccountMenu, setCompactAccountMenu] = useState(false);
+  const [identityMenuOpen, setIdentityMenuOpen] = useState(false);
   const authHydrated = useProcurementHydrated();
-  const { isAuthenticated, profile, signOut } = useProcurementStore();
+  const {
+    isAuthenticated,
+    account,
+    profile,
+    purchaseContexts,
+    activePurchaseContextId,
+    activePurchaseContext,
+    switchPurchaseContext,
+    signOut,
+  } = useProcurementStore();
   const accountRoleLabel = tAccount(profile.role);
   const effectiveAuthenticated = authHydrated && isAuthenticated;
-  const accountLabel = effectiveAuthenticated ? accountRoleLabel : t('account');
-  const accountHref = effectiveAuthenticated ? `/${locale}/account` : `/${locale}/login`;
+  const accountLabel = effectiveAuthenticated
+    ? (activePurchaseContext?.displayName ?? accountRoleLabel)
+    : t('account');
   const accountMeta =
     effectiveAuthenticated && profile.contactName !== accountRoleLabel
       ? `${profile.contactName} · ${accountRoleLabel}`
       : accountRoleLabel;
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 639px)');
+    const updateMenuMode = () => setCompactAccountMenu(query.matches);
+
+    updateMenuMode();
+    query.addEventListener('change', updateMenuMode);
+    return () => query.removeEventListener('change', updateMenuMode);
+  }, []);
 
   return (
     <header className="bg-neutral-0 sticky top-0 z-50 border-b border-[#EFEFEF] text-[#333]">
@@ -103,74 +147,182 @@ export function TopNav({ locale }: TopNavProps) {
               iconClassName="size-[18px] lg:size-[20px]"
             />
 
-            <div className="group relative">
-              <NextLink
-                href={accountHref}
-                aria-label={accountLabel}
-                className="inline-flex size-[40px] shrink-0 items-center justify-center text-[#333] transition-colors hover:text-[#A92424]"
-              >
-                <User className="size-[18px] lg:size-[20px]" />
-              </NextLink>
-              <div className="invisible absolute top-full right-0 z-50 pt-3 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100">
-                <div className="bg-bg-elevated text-text-strong shadow-popover w-[240px] rounded-md p-2">
-                  {effectiveAuthenticated ? (
-                    <>
-                      <div className="px-2 py-2">
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (!open) setIdentityMenuOpen(false);
+              }}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={accountLabel}
+                  className="inline-flex size-[40px] shrink-0 items-center justify-center text-[#333] transition-colors hover:text-[#A92424] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A92424]"
+                >
+                  <User className="size-[18px] lg:size-[20px]" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={10} className="w-[300px] p-2">
+                {effectiveAuthenticated && compactAccountMenu && identityMenuOpen ? (
+                  <>
+                    <DropdownMenuItem
+                      className="text-sm"
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        setIdentityMenuOpen(false);
+                      }}
+                    >
+                      <ArrowLeft className="size-4" />
+                      <span>{t('backToAccountMenu')}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>{t('switchContext')}</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup
+                      value={activePurchaseContextId ?? undefined}
+                      onValueChange={switchPurchaseContext}
+                    >
+                      {purchaseContexts.map((context) => (
+                        <DropdownMenuRadioItem
+                          key={context.contextId}
+                          value={context.contextId}
+                          className="items-start py-2 text-sm"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {context.displayName}
+                            </span>
+                            <span className="text-text-muted block text-xs">
+                              {context.kind === 'organization'
+                                ? t('organizationContext')
+                                : t('personalContext')}
+                            </span>
+                          </span>
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </>
+                ) : effectiveAuthenticated ? (
+                  <>
+                    <div className="px-2 py-2">
+                      <span className="text-text-strong block truncate text-sm font-semibold">
+                        {account?.name ?? profile.contactName}
+                      </span>
+                      <span className="text-text-muted mt-1 block truncate text-xs">
+                        {account?.email ?? accountMeta}
+                      </span>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>{t('currentContext')}</DropdownMenuLabel>
+                    <div className="bg-bg-control mx-1 mb-2 flex items-center gap-3 rounded-md px-3 py-2.5">
+                      <span className="bg-bg-elevated text-brand-500 flex size-8 shrink-0 items-center justify-center rounded-full">
+                        {activePurchaseContext?.kind === 'organization' ? (
+                          <Building2 className="size-4" />
+                        ) : (
+                          <User className="size-4" />
+                        )}
+                      </span>
+                      <span className="min-w-0">
                         <span className="text-text-strong block truncate text-sm font-semibold">
-                          {profile.companyName}
+                          {activePurchaseContext?.displayName ?? profile.companyName}
                         </span>
-                        <span className="text-text-muted mt-1 block truncate text-xs">
-                          {accountMeta}
+                        <span className="text-text-muted block truncate text-xs">
+                          {activePurchaseContext?.kind === 'organization'
+                            ? accountMeta
+                            : t('personalContext')}
                         </span>
-                      </div>
-                      <div className="bg-divider -mx-1 my-1 h-px" />
-                      <NextLink
-                        href={`/${locale}/account`}
-                        className="hover:bg-bg-control-hover flex min-h-[36px] items-center gap-2 rounded-sm px-2 text-sm transition-colors"
-                      >
+                      </span>
+                    </div>
+                    {purchaseContexts.length > 1 && (
+                      <>
+                        {compactAccountMenu ? (
+                          <DropdownMenuItem
+                            className="text-sm"
+                            onSelect={(event) => {
+                              event.preventDefault();
+                              setIdentityMenuOpen(true);
+                            }}
+                          >
+                            <ArrowLeftRight className="size-4" />
+                            <span>{t('switchContext')}</span>
+                            <ChevronRight className="ml-auto size-4" />
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger className="text-sm">
+                              <ArrowLeftRight className="size-4" />
+                              <span>{t('switchContext')}</span>
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent
+                              sideOffset={8}
+                              alignOffset={-4}
+                              className="max-h-[min(420px,var(--radix-dropdown-menu-content-available-height))] w-[300px] max-w-[calc(100vw-24px)] overflow-y-auto p-2"
+                            >
+                              <DropdownMenuLabel>{t('switchContext')}</DropdownMenuLabel>
+                              <DropdownMenuRadioGroup
+                                value={activePurchaseContextId ?? undefined}
+                                onValueChange={switchPurchaseContext}
+                              >
+                                {purchaseContexts.map((context) => (
+                                  <DropdownMenuRadioItem
+                                    key={context.contextId}
+                                    value={context.contextId}
+                                    className="items-start py-2 text-sm"
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block truncate font-medium">
+                                        {context.displayName}
+                                      </span>
+                                      <span className="text-text-muted block text-xs">
+                                        {context.kind === 'organization'
+                                          ? t('organizationContext')
+                                          : t('personalContext')}
+                                      </span>
+                                    </span>
+                                  </DropdownMenuRadioItem>
+                                ))}
+                              </DropdownMenuRadioGroup>
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        )}
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuItem asChild className="text-sm">
+                      <NextLink href={`/${locale}/account`}>
                         <User className="size-4" />
                         <span>{t('account')}</span>
                       </NextLink>
-                      <NextLink
-                        href={`/${locale}/orders`}
-                        className="hover:bg-bg-control-hover flex min-h-[36px] items-center gap-2 rounded-sm px-2 text-sm transition-colors"
-                      >
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className="text-sm">
+                      <NextLink href={`/${locale}/orders`}>
                         <ClipboardCheck className="size-4" />
                         <span>{t('ordersCenter')}</span>
                       </NextLink>
-                      <div className="bg-divider -mx-1 my-1 h-px" />
-                      <button
-                        type="button"
-                        className="text-brand-500 hover:bg-brand-soft flex min-h-[36px] w-full items-center gap-2 rounded-sm px-2 text-left text-sm transition-colors"
-                        onClick={signOut}
-                      >
-                        <LogOut className="size-4" />
-                        <span>{t('signOut')}</span>
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="px-2 py-2">
-                        <span className="text-text-strong block text-sm font-semibold">
-                          {t('account')}
-                        </span>
-                        <span className="text-text-muted mt-1 block text-xs">
-                          {t('signInHint')}
-                        </span>
-                      </div>
-                      <div className="bg-divider -mx-1 my-1 h-px" />
-                      <NextLink
-                        href={`/${locale}/login`}
-                        className="hover:bg-bg-control-hover flex min-h-[36px] items-center gap-2 rounded-sm px-2 text-sm transition-colors"
-                      >
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-brand-500 text-sm" onSelect={signOut}>
+                      <LogOut className="size-4" />
+                      <span>{t('signOut')}</span>
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    <div className="px-2 py-2">
+                      <span className="text-text-strong block text-sm font-semibold">
+                        {t('account')}
+                      </span>
+                      <span className="text-text-muted mt-1 block text-xs">{t('signInHint')}</span>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild className="text-sm">
+                      <NextLink href={`/${locale}/login`}>
                         <LogIn className="size-4" />
                         <span>{t('login')}</span>
                       </NextLink>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <button
               type="button"

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react';
+import { CheckIcon, ChevronRightIcon } from 'lucide-react';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 
 import { cn } from '@/lib/utils';
@@ -110,14 +110,14 @@ function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        "focus:bg-bg-control-hover focus:text-text relative flex cursor-default items-center gap-2 rounded-sm py-2 pr-2 pl-8 text-lg outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "focus:bg-bg-control-hover focus:text-text data-[state=checked]:bg-bg-control relative flex cursor-default items-center gap-2 rounded-sm py-2 pr-8 pl-2 text-lg outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}
     >
-      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
+      <span className="pointer-events-none absolute top-1/2 right-2 flex size-4 -translate-y-1/2 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
-          <CircleIcon className="size-2 fill-current" />
+          <CheckIcon className="text-brand-500 size-4" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}

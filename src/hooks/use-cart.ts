@@ -16,8 +16,8 @@ export function useCartSafe() {
   const projectId = useCart((s) => s.projectId);
   const projectName = useCart((s) => s.projectName);
   const projects = useCart((s) => s.projects);
-  const enterpriseId = useCart((s) => s.enterpriseId);
-  const setEnterpriseContext = useCart((s) => s.setEnterpriseContext);
+  const purchaseContextId = useCart((s) => s.purchaseContextId);
+  const setPurchaseContext = useCart((s) => s.setPurchaseContext);
   const currentProjectId = useCart((s) => s.currentProjectId);
   const items = useCart((s) => s.items);
   const setProject = useCart((s) => s.setProject);
@@ -30,16 +30,30 @@ export function useCartSafe() {
   const clear = useCart((s) => s.clear);
   const isAuthenticated = useProcurementStore((s) => s.isAuthenticated);
   const profile = useProcurementStore((s) => s.profile);
+  const activePurchaseContext = useProcurementStore((s) => s.activePurchaseContext);
 
   useEffect(() => {
     if (!hydrated) return;
+    const nextContextId =
+      isAuthenticated && activePurchaseContext
+        ? activePurchaseContext.contextId
+        : 'guest:anonymous';
+    const nextContextKind = activePurchaseContext?.kind ?? 'personal';
     const nextEnterpriseId = isAuthenticated ? profile.enterpriseId : 'ENT-HITBOT-GUEST';
-    const nextCompanyName = isAuthenticated ? profile.companyName : '未进入企业账号';
-    setEnterpriseContext(nextEnterpriseId, nextCompanyName);
-  }, [hydrated, isAuthenticated, profile.companyName, profile.enterpriseId, setEnterpriseContext]);
+    const nextCompanyName = isAuthenticated ? profile.companyName : '访客购物车';
+    setPurchaseContext(nextContextId, nextContextKind, nextEnterpriseId, nextCompanyName);
+  }, [
+    activePurchaseContext,
+    hydrated,
+    isAuthenticated,
+    profile.companyName,
+    profile.enterpriseId,
+    setPurchaseContext,
+  ]);
 
   const scopedProjects = projects.filter(
-    (project) => (project.enterpriseId ?? 'ENT-HITBOT-GUEST') === enterpriseId,
+    (project) =>
+      (project.purchaseContextId ?? `organization:${project.enterpriseId}`) === purchaseContextId,
   );
 
   const count = items.reduce((n, i) => n + i.qty, 0);
