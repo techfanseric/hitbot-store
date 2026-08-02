@@ -5,4 +5,5 @@ export type {
   CartSyncStatus,
   OsBomImportInput,
   OsBomItemInput,
+  PurchaseContextKind,
 } from '@hitbot/domain';

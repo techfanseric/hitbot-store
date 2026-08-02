@@ -2,13 +2,14 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { CartItem, CartProject, OsBomImportInput } from '@/types/cart';
+import type { CartItem, CartProject, OsBomImportInput, PurchaseContextKind } from '@/types/cart';
 import type { PartClass } from '@/types/product';
 
 const DEFAULT_PROJECT_ID = 'web-catalog';
 const DEFAULT_PROJECT_NAME = '官网商品选购';
 const DEFAULT_ENTERPRISE_ID = 'ENT-HITBOT-CUSTOMER';
 const DEFAULT_COMPANY_NAME = '深圳智造装备有限公司';
+const DEFAULT_PURCHASE_CONTEXT_ID = `organization:${DEFAULT_ENTERPRISE_ID}`;
 
 interface AddOptions {
   source?: CartItem['source'];
@@ -18,6 +19,8 @@ interface AddOptions {
 }
 
 interface CartState {
+  purchaseContextId: string;
+  purchaseContextKind: PurchaseContextKind;
   enterpriseId: string;
   companyName: string;
   currentProjectId: string;
@@ -25,6 +28,12 @@ interface CartState {
   projectId: string;
   projectName: string;
   items: CartItem[];
+  setPurchaseContext: (
+    purchaseContextId: string,
+    purchaseContextKind: PurchaseContextKind,
+    enterpriseId: string,
+    companyName?: string,
+  ) => void;
   setEnterpriseContext: (enterpriseId: string, companyName?: string) => void;
   setProject: (projectId: string) => void;
   add: (productId: string, partClass: PartClass, qty?: number, options?: AddOptions) => void;
@@ -37,6 +46,8 @@ interface CartState {
 }
 
 const defaultProject: CartProject = {
+  purchaseContextId: DEFAULT_PURCHASE_CONTEXT_ID,
+  purchaseContextKind: 'organization',
   enterpriseId: DEFAULT_ENTERPRISE_ID,
   companyName: DEFAULT_COMPANY_NAME,
   projectId: DEFAULT_PROJECT_ID,
@@ -46,15 +57,20 @@ const defaultProject: CartProject = {
   updatedAt: Date.now(),
 };
 
-function projectEnterpriseId(project: CartProject) {
-  return project.enterpriseId ?? DEFAULT_ENTERPRISE_ID;
+function projectPurchaseContextId(project: CartProject) {
+  return (
+    project.purchaseContextId ?? `organization:${project.enterpriseId ?? DEFAULT_ENTERPRISE_ID}`
+  );
 }
 
 function activeProjects(
-  state: Pick<CartState, 'projects' | 'enterpriseId' | 'companyName'>,
+  state: Pick<
+    CartState,
+    'projects' | 'purchaseContextId' | 'purchaseContextKind' | 'enterpriseId' | 'companyName'
+  >,
 ): CartProject[] {
   const scoped = state.projects.filter(
-    (project) => projectEnterpriseId(project) === state.enterpriseId,
+    (project) => projectPurchaseContextId(project) === state.purchaseContextId,
   );
 
   if (scoped.length > 0) return scoped;
@@ -62,6 +78,8 @@ function activeProjects(
   return [
     {
       ...defaultProject,
+      purchaseContextId: state.purchaseContextId,
+      purchaseContextKind: state.purchaseContextKind,
       enterpriseId: state.enterpriseId,
       companyName: state.companyName,
       updatedAt: Date.now(),
@@ -70,7 +88,15 @@ function activeProjects(
 }
 
 function activeProject(
-  state: Pick<CartState, 'projects' | 'currentProjectId' | 'enterpriseId' | 'companyName'>,
+  state: Pick<
+    CartState,
+    | 'projects'
+    | 'currentProjectId'
+    | 'purchaseContextId'
+    | 'purchaseContextKind'
+    | 'enterpriseId'
+    | 'companyName'
+  >,
 ): CartProject {
   const scopedProjects = activeProjects(state);
   return (
@@ -81,6 +107,8 @@ function activeProject(
 
 function syncActiveFields(project: CartProject) {
   return {
+    purchaseContextId: projectPurchaseContextId(project),
+    purchaseContextKind: project.purchaseContextKind ?? 'organization',
     enterpriseId: project.enterpriseId ?? DEFAULT_ENTERPRISE_ID,
     companyName: project.companyName ?? DEFAULT_COMPANY_NAME,
     currentProjectId: project.projectId,
@@ -99,21 +127,24 @@ function updateProject(
   const target =
     state.projects.find(
       (project) =>
-        project.projectId === projectId && projectEnterpriseId(project) === state.enterpriseId,
+        project.projectId === projectId &&
+        projectPurchaseContextId(project) === state.purchaseContextId,
     ) ?? fallback;
   const updated = {
     ...updater(target),
+    purchaseContextId: state.purchaseContextId,
+    purchaseContextKind: state.purchaseContextKind,
     enterpriseId: state.enterpriseId,
     companyName: state.companyName,
   };
   const projects = state.projects.some(
     (project) =>
       project.projectId === updated.projectId &&
-      projectEnterpriseId(project) === state.enterpriseId,
+      projectPurchaseContextId(project) === state.purchaseContextId,
   )
     ? state.projects.map((project) =>
         project.projectId === updated.projectId &&
-        projectEnterpriseId(project) === state.enterpriseId
+        projectPurchaseContextId(project) === state.purchaseContextId
           ? updated
           : project,
       )
@@ -127,22 +158,36 @@ function updateProject(
 
 export const useCart = create<CartState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       currentProjectId: DEFAULT_PROJECT_ID,
+      purchaseContextId: DEFAULT_PURCHASE_CONTEXT_ID,
+      purchaseContextKind: 'organization',
       enterpriseId: DEFAULT_ENTERPRISE_ID,
       companyName: DEFAULT_COMPANY_NAME,
       projects: [defaultProject],
       projectId: DEFAULT_PROJECT_ID,
       projectName: DEFAULT_PROJECT_NAME,
       items: [],
-      setEnterpriseContext: (enterpriseId, companyName = DEFAULT_COMPANY_NAME) =>
+      setPurchaseContext: (
+        purchaseContextId,
+        purchaseContextKind,
+        enterpriseId,
+        companyName = DEFAULT_COMPANY_NAME,
+      ) =>
         set((state) => {
-          if (state.enterpriseId === enterpriseId && state.companyName === companyName) {
+          if (
+            state.purchaseContextId === purchaseContextId &&
+            state.purchaseContextKind === purchaseContextKind &&
+            state.enterpriseId === enterpriseId &&
+            state.companyName === companyName
+          ) {
             return state;
           }
 
           const scopedProjects = activeProjects({
             projects: state.projects,
+            purchaseContextId,
+            purchaseContextKind,
             enterpriseId,
             companyName,
           });
@@ -152,17 +197,26 @@ export const useCart = create<CartState>()(
 
           return syncActiveFields({
             ...nextProject,
+            purchaseContextId,
+            purchaseContextKind,
             enterpriseId,
             companyName,
           });
         }),
+      setEnterpriseContext: (enterpriseId, companyName = DEFAULT_COMPANY_NAME) =>
+        get().setPurchaseContext(
+          `organization:${enterpriseId}`,
+          'organization',
+          enterpriseId,
+          companyName,
+        ),
       setProject: (projectId) =>
         set((state) => {
           const nextProject =
             state.projects.find(
               (project) =>
                 project.projectId === projectId &&
-                projectEnterpriseId(project) === state.enterpriseId,
+                projectPurchaseContextId(project) === state.purchaseContextId,
             ) ?? activeProject(state);
           return syncActiveFields(nextProject);
         }),
@@ -211,9 +265,11 @@ export const useCart = create<CartState>()(
           const existing = state.projects.find(
             (project) =>
               project.projectId === projectId &&
-              projectEnterpriseId(project) === state.enterpriseId,
+              projectPurchaseContextId(project) === state.purchaseContextId,
           );
           const baseProject: CartProject = existing ?? {
+            purchaseContextId: state.purchaseContextId,
+            purchaseContextKind: state.purchaseContextKind,
             enterpriseId: state.enterpriseId,
             companyName: state.companyName,
             projectId,
@@ -249,6 +305,8 @@ export const useCart = create<CartState>()(
               }, baseProject.items);
           const updatedProject: CartProject = {
             ...baseProject,
+            purchaseContextId: state.purchaseContextId,
+            purchaseContextKind: state.purchaseContextKind,
             enterpriseId: state.enterpriseId,
             companyName: state.companyName,
             projectName,
@@ -259,11 +317,11 @@ export const useCart = create<CartState>()(
           const projects = state.projects.some(
             (project) =>
               project.projectId === projectId &&
-              projectEnterpriseId(project) === state.enterpriseId,
+              projectPurchaseContextId(project) === state.purchaseContextId,
           )
             ? state.projects.map((project) =>
                 project.projectId === projectId &&
-                projectEnterpriseId(project) === state.enterpriseId
+                projectPurchaseContextId(project) === state.purchaseContextId
                   ? updatedProject
                   : project,
               )
@@ -333,6 +391,8 @@ export const useCart = create<CartState>()(
         const persistedProjects = persisted.projects;
         const legacyProject: CartProject = {
           ...defaultProject,
+          purchaseContextId: DEFAULT_PURCHASE_CONTEXT_ID,
+          purchaseContextKind: 'organization',
           enterpriseId: DEFAULT_ENTERPRISE_ID,
           companyName: DEFAULT_COMPANY_NAME,
           projectId: persisted.projectId ?? DEFAULT_PROJECT_ID,
@@ -344,18 +404,34 @@ export const useCart = create<CartState>()(
           persistedProjects && persistedProjects.length > 0
             ? persistedProjects.map((project) => ({
                 ...project,
+                purchaseContextId:
+                  project.purchaseContextId ??
+                  `organization:${project.enterpriseId ?? DEFAULT_ENTERPRISE_ID}`,
+                purchaseContextKind: project.purchaseContextKind ?? 'organization',
                 enterpriseId: project.enterpriseId ?? DEFAULT_ENTERPRISE_ID,
                 companyName: project.companyName ?? DEFAULT_COMPANY_NAME,
               }))
             : [legacyProject];
+        const purchaseContextId =
+          persisted.purchaseContextId ??
+          `organization:${persisted.enterpriseId ?? DEFAULT_ENTERPRISE_ID}`;
+        const purchaseContextKind = persisted.purchaseContextKind ?? 'organization';
         const enterpriseId = persisted.enterpriseId ?? DEFAULT_ENTERPRISE_ID;
         const companyName = persisted.companyName ?? DEFAULT_COMPANY_NAME;
         const currentProjectId = persisted.currentProjectId ?? legacyProject.projectId;
         const project =
           projects.find(
             (item) =>
-              item.projectId === currentProjectId && projectEnterpriseId(item) === enterpriseId,
-          ) ?? activeProjects({ projects, enterpriseId, companyName })[0];
+              item.projectId === currentProjectId &&
+              projectPurchaseContextId(item) === purchaseContextId,
+          ) ??
+          activeProjects({
+            projects,
+            purchaseContextId,
+            purchaseContextKind,
+            enterpriseId,
+            companyName,
+          })[0];
 
         return {
           ...currentState,
@@ -363,6 +439,8 @@ export const useCart = create<CartState>()(
           projects,
           ...syncActiveFields({
             ...project,
+            purchaseContextId,
+            purchaseContextKind,
             enterpriseId,
             companyName,
           }),

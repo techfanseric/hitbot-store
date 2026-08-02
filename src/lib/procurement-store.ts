@@ -11,6 +11,7 @@ import {
   quoteRequests as sharedQuoteRequests,
 } from '@hitbot/domain';
 import { approvalSettingsForEnterprise, useAdminStore } from '@/lib/admin-store';
+import type { AdminMember } from '@/types/admin';
 import type {
   AddressProfile,
   ApprovalMode,
@@ -24,11 +25,14 @@ import type {
   OrderAddressSnapshot,
   OrderInvoiceSnapshot,
   OrderLineSnapshot,
+  PurchaseContext,
+  UserAccount,
 } from '@/types/procurement';
 
 const MOCK_ADMIN_NAME = '林若安';
 const MOCK_BUYER_NAME = '陈思远';
 const MOCK_ENGINEER_NAME = '周亦辰';
+const PERSONAL_CONTEXT_NAME = '个人购买';
 
 const defaultProfile: EnterpriseProfile = {
   enterpriseId: 'ENT-HITBOT-CUSTOMER',
@@ -41,6 +45,122 @@ const defaultProfile: EnterpriseProfile = {
 };
 
 export const DEFAULT_ENTERPRISE_ID = defaultProfile.enterpriseId;
+
+function normalizeAccountEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function accountIdForEmail(email: string) {
+  let hash = 0;
+  for (const character of normalizeAccountEmail(email)) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return `account-${hash.toString(36)}`;
+}
+
+function accountFromMember(member: EnterMemberInput | AdminMember): UserAccount {
+  return {
+    id: accountIdForEmail(member.email),
+    name: member.name,
+    phone: member.phone ?? '',
+    email: normalizeAccountEmail(member.email),
+  };
+}
+
+function personalContextForAccount(account: UserAccount): PurchaseContext {
+  return {
+    contextId: `personal:${account.id}`,
+    kind: 'personal',
+    displayName: PERSONAL_CONTEXT_NAME,
+    accountId: account.id,
+  };
+}
+
+function contextsForAccount(
+  account: UserAccount,
+  members: AdminMember[],
+  fallbackMember?: EnterMemberInput,
+): PurchaseContext[] {
+  const normalizedEmail = normalizeAccountEmail(account.email);
+  const matchingMembers = members.filter(
+    (member) =>
+      member.status === 'active' && normalizeAccountEmail(member.email) === normalizedEmail,
+  );
+
+  if (matchingMembers.length === 0 && fallbackMember?.enterpriseId) {
+    matchingMembers.push({
+      id: fallbackMember.id ?? `member-${account.id}`,
+      enterpriseId: fallbackMember.enterpriseId,
+      companyName: fallbackMember.companyName,
+      name: fallbackMember.name,
+      email: fallbackMember.email,
+      phone: fallbackMember.phone,
+      role: fallbackMember.role,
+      status: 'active',
+      permissions: [],
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  const organizationContexts = matchingMembers.reduce<PurchaseContext[]>((contexts, member) => {
+    const enterpriseId = member.enterpriseId ?? defaultProfile.enterpriseId;
+    if (
+      contexts.some(
+        (context) => context.kind === 'organization' && context.enterpriseId === enterpriseId,
+      )
+    ) {
+      return contexts;
+    }
+
+    const companyName = member.companyName ?? defaultProfile.companyName;
+    return [
+      ...contexts,
+      {
+        contextId: `organization:${enterpriseId}`,
+        kind: 'organization',
+        displayName: companyName,
+        enterpriseId,
+        companyName,
+        membershipId: member.id,
+        role: member.role,
+      },
+    ];
+  }, []);
+
+  return [...organizationContexts, personalContextForAccount(account)];
+}
+
+function profileForContext(
+  account: UserAccount,
+  context: PurchaseContext,
+  signedInAt = new Date().toISOString(),
+): EnterpriseProfile {
+  if (context.kind === 'personal') {
+    return {
+      enterpriseId: context.contextId,
+      companyName: context.displayName,
+      role: 'buyer',
+      contactName: account.name,
+      phone: account.phone,
+      email: account.email,
+      signedInAt,
+    };
+  }
+
+  return {
+    enterpriseId: context.enterpriseId,
+    companyName: context.companyName,
+    role: context.role,
+    contactName: account.name,
+    phone: account.phone,
+    email: account.email,
+    signedInAt,
+  };
+}
+
+function isPersonalProfile(profile: EnterpriseProfile) {
+  return profile.enterpriseId.startsWith('personal:');
+}
 
 const defaultDraft: CheckoutDraft = {
   recipient: MOCK_BUYER_NAME,
@@ -69,6 +189,7 @@ interface SubmitOrderInput {
 }
 
 interface EnterMemberInput {
+  id?: string;
   name: string;
   email: string;
   phone?: string;
@@ -76,6 +197,14 @@ interface EnterMemberInput {
   enterpriseId?: string;
   companyName?: string;
 }
+
+interface RegisterPersonalInput {
+  name: string;
+  email: string;
+  phone: string;
+}
+
+type RegistrationResult = 'success' | 'email-exists' | 'invalid';
 
 interface RecordOsHandoffInput {
   projectId: string;
@@ -86,6 +215,11 @@ interface RecordOsHandoffInput {
 
 interface ProcurementState {
   isAuthenticated: boolean;
+  account: UserAccount | null;
+  registeredAccounts: UserAccount[];
+  purchaseContexts: PurchaseContext[];
+  activePurchaseContextId: string | null;
+  activePurchaseContext: PurchaseContext | null;
   profile: EnterpriseProfile;
   checkoutDraft: CheckoutDraft;
   checkoutDrafts: Record<string, CheckoutDraft>;
@@ -97,6 +231,9 @@ interface ProcurementState {
   signIn: () => void;
   signOut: () => void;
   enterMember: (member: EnterMemberInput) => void;
+  loginAccount: (emailOrName: string) => boolean;
+  registerPersonalAccount: (input: RegisterPersonalInput) => RegistrationResult;
+  switchPurchaseContext: (contextId: string) => boolean;
   updateProfile: (patch: Partial<EnterpriseProfile>) => void;
   setRole: (role: EnterpriseRole) => void;
   updateCheckoutDraft: (patch: Partial<Omit<CheckoutDraft, 'approvalMode' | 'approver'>>) => void;
@@ -215,6 +352,18 @@ function normalizeCheckoutDraftForRole(
   profile: EnterpriseProfile,
   draft: CheckoutDraft,
 ): CheckoutDraft {
+  if (isPersonalProfile(profile)) {
+    return {
+      ...draft,
+      paymentMethod: 'personal',
+      invoiceTitle: '',
+      taxId: '',
+      bankAccount: '',
+      approvalMode: 'not-required',
+      approver: '',
+    };
+  }
+
   return {
     ...draft,
     approvalMode: approvalModeForRole(profile.role),
@@ -223,6 +372,23 @@ function normalizeCheckoutDraftForRole(
 }
 
 function defaultDraftForProfile(profile: EnterpriseProfile): CheckoutDraft {
+  if (isPersonalProfile(profile)) {
+    return {
+      recipient: profile.contactName,
+      phone: profile.phone,
+      province: '',
+      city: '',
+      address: '',
+      paymentMethod: 'personal',
+      invoiceTitle: '',
+      taxId: '',
+      bankAccount: '',
+      approvalMode: 'not-required',
+      approver: '',
+      note: '',
+    };
+  }
+
   if (profile.enterpriseId === defaultProfile.enterpriseId) {
     return {
       ...defaultDraft,
@@ -342,6 +508,11 @@ export const useProcurementStore = create<ProcurementState>()(
   persist(
     (set, get) => ({
       isAuthenticated: false,
+      account: null,
+      registeredAccounts: [],
+      purchaseContexts: [],
+      activePurchaseContextId: null,
+      activePurchaseContext: null,
       profile: sharedDefaultProfile,
       checkoutDraft: defaultDraft,
       checkoutDrafts: {
@@ -352,18 +523,16 @@ export const useProcurementStore = create<ProcurementState>()(
       orders: sharedOrders,
       quoteRequests: sharedQuoteRequests,
       osHandoffs: sharedOsHandoffs,
-      signIn: () =>
-        set((state) => ({
-          isAuthenticated: true,
-          profile: {
-            ...state.profile,
-            signedInAt: new Date().toISOString(),
-          },
-          checkoutDraft: draftForProfile(state.profile, state.checkoutDrafts),
-        })),
+      signIn: () => {
+        get().loginAccount(get().profile.email);
+      },
       signOut: () =>
         set((state) => ({
           isAuthenticated: false,
+          account: null,
+          purchaseContexts: [],
+          activePurchaseContextId: null,
+          activePurchaseContext: null,
           profile: {
             ...state.profile,
             signedInAt: null,
@@ -371,34 +540,38 @@ export const useProcurementStore = create<ProcurementState>()(
         })),
       enterMember: (member) =>
         set((state) => {
+          const account = accountFromMember(member);
+          const contexts = contextsForAccount(account, useAdminStore.getState().members, member);
+          const preferredEnterpriseId = member.enterpriseId ?? state.profile.enterpriseId;
+          const activeContext =
+            contexts.find(
+              (context) =>
+                context.kind === 'organization' && context.enterpriseId === preferredEnterpriseId,
+            ) ??
+            contexts.find((context) => context.kind === 'organization') ??
+            contexts[0];
+          if (!activeContext) return state;
           const currentDrafts = {
             ...state.checkoutDrafts,
             [state.profile.enterpriseId]: state.checkoutDraft,
           };
-          const nextProfile: EnterpriseProfile = {
-            ...state.profile,
-            enterpriseId: member.enterpriseId ?? state.profile.enterpriseId,
-            companyName: member.companyName ?? state.profile.companyName,
-            role: member.role,
-            contactName: member.name,
-            email: member.email,
-            phone: member.phone ?? state.profile.phone,
-            signedInAt: new Date().toISOString(),
-          };
+          const nextProfile = profileForContext(account, activeContext);
           const baseDraft = draftForProfile(nextProfile, currentDrafts);
           const shouldMoveRecipient =
             baseDraft.recipient === state.profile.contactName ||
             baseDraft.recipient === defaultDraft.recipient;
           const nextDraft: CheckoutDraft = {
             ...baseDraft,
-            recipient: shouldMoveRecipient ? member.name : baseDraft.recipient,
-            phone: member.phone ?? baseDraft.phone,
-            approvalMode: approvalModeForRole(member.role),
-            approver: approverForProfile(nextProfile),
+            recipient: shouldMoveRecipient ? account.name : baseDraft.recipient,
+            phone: account.phone || baseDraft.phone,
           };
 
           return {
             isAuthenticated: true,
+            account,
+            purchaseContexts: contexts,
+            activePurchaseContextId: activeContext.contextId,
+            activePurchaseContext: activeContext,
             profile: nextProfile,
             checkoutDraft: nextDraft,
             checkoutDrafts: {
@@ -407,12 +580,155 @@ export const useProcurementStore = create<ProcurementState>()(
             },
           };
         }),
+      loginAccount: (emailOrName) => {
+        const normalizedValue = emailOrName.trim().toLowerCase();
+        const state = get();
+        const members = useAdminStore.getState().members;
+        const member = members.find(
+          (item) =>
+            item.status === 'active' &&
+            (normalizeAccountEmail(item.email) === normalizedValue ||
+              item.name.trim().toLowerCase() === normalizedValue),
+        );
+        const registeredAccount = state.registeredAccounts.find(
+          (item) =>
+            normalizeAccountEmail(item.email) === normalizedValue ||
+            item.name.trim().toLowerCase() === normalizedValue,
+        );
+        const account = registeredAccount ?? (member ? accountFromMember(member) : undefined);
+        if (!account) return false;
+
+        const contexts = contextsForAccount(account, members, member);
+        const previousContext =
+          state.account?.id === account.id
+            ? contexts.find((context) => context.contextId === state.activePurchaseContextId)
+            : undefined;
+        const activeContext =
+          previousContext ??
+          contexts.find((context) => context.kind === 'organization') ??
+          contexts[0];
+        if (!activeContext) return false;
+
+        const checkoutDrafts = {
+          ...state.checkoutDrafts,
+          [state.profile.enterpriseId]: state.checkoutDraft,
+        };
+        const profile = profileForContext(account, activeContext);
+        const checkoutDraft = draftForProfile(profile, checkoutDrafts);
+        set({
+          isAuthenticated: true,
+          account,
+          purchaseContexts: contexts,
+          activePurchaseContextId: activeContext.contextId,
+          activePurchaseContext: activeContext,
+          profile,
+          checkoutDraft,
+          checkoutDrafts: {
+            ...checkoutDrafts,
+            [profile.enterpriseId]: checkoutDraft,
+          },
+        });
+        return true;
+      },
+      registerPersonalAccount: (input) => {
+        const name = input.name.trim();
+        const email = normalizeAccountEmail(input.email);
+        const phone = input.phone.trim();
+        if (!name || !email || !phone) return 'invalid';
+
+        const state = get();
+        if (
+          state.registeredAccounts.some((account) => normalizeAccountEmail(account.email) === email)
+        ) {
+          return 'email-exists';
+        }
+
+        const account: UserAccount = {
+          id: accountIdForEmail(email),
+          name,
+          email,
+          phone,
+          registeredAt: new Date().toISOString(),
+        };
+        const contexts = contextsForAccount(account, useAdminStore.getState().members);
+        const activeContext =
+          contexts.find((context) => context.kind === 'organization') ?? contexts[0];
+        if (!activeContext) return 'invalid';
+
+        const checkoutDrafts = {
+          ...state.checkoutDrafts,
+          [state.profile.enterpriseId]: state.checkoutDraft,
+        };
+        const profile = profileForContext(account, activeContext);
+        const checkoutDraft = draftForProfile(profile, checkoutDrafts);
+        set({
+          isAuthenticated: true,
+          account,
+          registeredAccounts: [...state.registeredAccounts, account],
+          purchaseContexts: contexts,
+          activePurchaseContextId: activeContext.contextId,
+          activePurchaseContext: activeContext,
+          profile,
+          checkoutDraft,
+          checkoutDrafts: {
+            ...checkoutDrafts,
+            [profile.enterpriseId]: checkoutDraft,
+          },
+        });
+        return 'success';
+      },
+      switchPurchaseContext: (contextId) => {
+        const state = get();
+        if (!state.isAuthenticated || !state.account) return false;
+        const activeContext = state.purchaseContexts.find(
+          (context) => context.contextId === contextId,
+        );
+        if (!activeContext) return false;
+
+        const checkoutDrafts = {
+          ...state.checkoutDrafts,
+          [state.profile.enterpriseId]: state.checkoutDraft,
+        };
+        const profile = profileForContext(state.account, activeContext);
+        const checkoutDraft = draftForProfile(profile, checkoutDrafts);
+        set({
+          activePurchaseContextId: activeContext.contextId,
+          activePurchaseContext: activeContext,
+          profile,
+          checkoutDraft,
+          checkoutDrafts: {
+            ...checkoutDrafts,
+            [profile.enterpriseId]: checkoutDraft,
+          },
+        });
+        return true;
+      },
       updateProfile: (patch) =>
         set((state) => {
           const nextProfile = {
             ...state.profile,
             ...patch,
           };
+          const nextAccount = state.account
+            ? {
+                ...state.account,
+                name: patch.contactName ?? state.account.name,
+                phone: patch.phone ?? state.account.phone,
+                email: patch.email ? normalizeAccountEmail(patch.email) : state.account.email,
+              }
+            : null;
+          const nextContexts = state.purchaseContexts.map((context) =>
+            context.kind === 'organization' && context.contextId === state.activePurchaseContextId
+              ? {
+                  ...context,
+                  displayName: patch.companyName ?? context.displayName,
+                  companyName: patch.companyName ?? context.companyName,
+                }
+              : context,
+          );
+          const nextActiveContext =
+            nextContexts.find((context) => context.contextId === state.activePurchaseContextId) ??
+            state.activePurchaseContext;
           const currentDrafts = {
             ...state.checkoutDrafts,
             [state.profile.enterpriseId]: state.checkoutDraft,
@@ -425,6 +741,14 @@ export const useProcurementStore = create<ProcurementState>()(
             : state.checkoutDraft;
 
           return {
+            account: nextAccount,
+            registeredAccounts: nextAccount
+              ? state.registeredAccounts.map((account) =>
+                  account.id === nextAccount.id ? nextAccount : account,
+                )
+              : state.registeredAccounts,
+            purchaseContexts: nextContexts,
+            activePurchaseContext: nextActiveContext,
             profile: nextProfile,
             checkoutDraft: nextDraft,
             checkoutDrafts: {
@@ -435,10 +759,16 @@ export const useProcurementStore = create<ProcurementState>()(
         }),
       setRole: (role) =>
         set((state) => {
+          if (state.activePurchaseContext?.kind === 'personal') return state;
           const nextProfile = {
             ...state.profile,
             role,
           };
+          const nextContexts = state.purchaseContexts.map((context) =>
+            context.kind === 'organization' && context.contextId === state.activePurchaseContextId
+              ? { ...context, role }
+              : context,
+          );
           const nextDraft: CheckoutDraft = {
             ...state.checkoutDraft,
             approvalMode: approvalModeForRole(role),
@@ -446,6 +776,10 @@ export const useProcurementStore = create<ProcurementState>()(
           };
 
           return {
+            purchaseContexts: nextContexts,
+            activePurchaseContext:
+              nextContexts.find((context) => context.contextId === state.activePurchaseContextId) ??
+              state.activePurchaseContext,
             profile: nextProfile,
             checkoutDraft: nextDraft,
             checkoutDrafts: {
@@ -529,6 +863,10 @@ export const useProcurementStore = create<ProcurementState>()(
           );
           const nextAddress: AddressProfile = {
             id: existing?.id ?? nextProfileId('addr'),
+            purchaseContextId:
+              state.activePurchaseContext?.contextId ??
+              `organization:${state.profile.enterpriseId}`,
+            purchaseContextKind: state.activePurchaseContext?.kind ?? 'organization',
             enterpriseId: state.profile.enterpriseId,
             companyName: state.profile.companyName,
             label: existing?.label ?? `${checkoutDraft.city || '收货'}地址`,
@@ -548,6 +886,7 @@ export const useProcurementStore = create<ProcurementState>()(
         }),
       saveCheckoutInvoice: () =>
         set((state) => {
+          if (state.activePurchaseContext?.kind === 'personal') return state;
           const { checkoutDraft } = state;
           const updatedAt = new Date().toISOString();
           const existing = state.invoiceProfiles.find(
@@ -559,6 +898,10 @@ export const useProcurementStore = create<ProcurementState>()(
           );
           const nextInvoice: InvoiceProfile = {
             id: existing?.id ?? nextProfileId('inv'),
+            purchaseContextId:
+              state.activePurchaseContext?.contextId ??
+              `organization:${state.profile.enterpriseId}`,
+            purchaseContextKind: state.activePurchaseContext?.kind ?? 'organization',
             enterpriseId: state.profile.enterpriseId,
             companyName: state.profile.companyName,
             label: (existing?.label ?? checkoutDraft.invoiceTitle) || '发票抬头',
@@ -590,9 +933,10 @@ export const useProcurementStore = create<ProcurementState>()(
         invoice,
         note,
       }) => {
-        const { isAuthenticated, profile } = get();
+        const { isAuthenticated, profile, activePurchaseContext } = get();
         if (!isAuthenticated) return undefined;
-        if (profile.role === 'engineer') {
+        const isPersonalContext = activePurchaseContext?.kind === 'personal';
+        if (!isPersonalContext && profile.role === 'engineer') {
           get().recordOsHandoff({
             projectId,
             projectName,
@@ -603,7 +947,7 @@ export const useProcurementStore = create<ProcurementState>()(
         }
 
         const { checkoutDraft } = get();
-        const approver = approverForProfile(profile);
+        const approver = isPersonalContext ? '' : approverForProfile(profile);
         const submittedAt = new Date().toISOString();
         const orderNo = nextOrderNo();
         const quoteLines = lines.filter(
@@ -611,14 +955,12 @@ export const useProcurementStore = create<ProcurementState>()(
         );
         const billableLines = lines.filter((line) => line.selected !== false && line.sellable);
         const quoteOnlyOrder = quoteLines.length > 0 && billableLines.length === 0;
-        const requiresApproval = orderRequiresApproval(
-          profile,
-          subtotalCents,
-          quoteLines.length > 0,
-        );
+        const requiresApproval = isPersonalContext
+          ? false
+          : orderRequiresApproval(profile, subtotalCents, quoteLines.length > 0);
         const approvalMode: ApprovalMode = requiresApproval
           ? approvalModeForRole(profile.role)
-          : profile.role === 'admin'
+          : !isPersonalContext && profile.role === 'admin'
             ? 'admin-direct'
             : 'not-required';
         const status: LocalOrderSnapshot['status'] = quoteOnlyOrder
@@ -644,6 +986,10 @@ export const useProcurementStore = create<ProcurementState>()(
           orders: [
             {
               orderNo,
+              purchaseContextId:
+                activePurchaseContext?.contextId ?? `organization:${profile.enterpriseId}`,
+              purchaseContextKind: activePurchaseContext?.kind ?? 'organization',
+              buyerDisplayName: activePurchaseContext?.displayName ?? profile.companyName,
               enterpriseId: profile.enterpriseId,
               companyName: profile.companyName,
               projectId,
@@ -656,11 +1002,13 @@ export const useProcurementStore = create<ProcurementState>()(
               submittedBy: profile.contactName,
               approver: status === 'pending-approval' ? approver : undefined,
               approvedBy:
-                status === 'pending-payment' && profile.role === 'admin'
+                status === 'pending-payment' && !isPersonalContext && profile.role === 'admin'
                   ? profile.contactName
                   : undefined,
               approvedAt:
-                status === 'pending-payment' && profile.role === 'admin' ? submittedAt : undefined,
+                status === 'pending-payment' && !isPersonalContext && profile.role === 'admin'
+                  ? submittedAt
+                  : undefined,
               paymentMethod: checkoutDraft.paymentMethod,
               lines,
               shippingAddress,
@@ -771,8 +1119,9 @@ export const useProcurementStore = create<ProcurementState>()(
         }));
       },
       acceptLocalQuote: (requestNo) => {
-        const { isAuthenticated, profile } = get();
+        const { isAuthenticated, profile, activePurchaseContext } = get();
         if (!isAuthenticated || profile.role === 'engineer') return;
+        const isPersonalContext = activePurchaseContext?.kind === 'personal';
 
         const updatedAt = new Date().toISOString();
         set((state) => ({
@@ -800,15 +1149,13 @@ export const useProcurementStore = create<ProcurementState>()(
               return order;
             }
 
-            const requiresApproval = orderRequiresApproval(
-              profile,
-              request.estimateCents ?? order.subtotalCents,
-              true,
-            );
+            const requiresApproval = isPersonalContext
+              ? false
+              : orderRequiresApproval(profile, request.estimateCents ?? order.subtotalCents, true);
             const nextStatus = requiresApproval ? 'pending-approval' : 'pending-payment';
             const approvalMode: ApprovalMode = requiresApproval
               ? approvalModeForRole(profile.role)
-              : profile.role === 'admin'
+              : !isPersonalContext && profile.role === 'admin'
                 ? 'admin-direct'
                 : 'not-required';
 
@@ -819,11 +1166,11 @@ export const useProcurementStore = create<ProcurementState>()(
               subtotalCents: request.estimateCents ?? order.subtotalCents,
               approver: nextStatus === 'pending-approval' ? approverForProfile(profile) : undefined,
               approvedBy:
-                nextStatus === 'pending-payment' && profile.role === 'admin'
+                nextStatus === 'pending-payment' && !isPersonalContext && profile.role === 'admin'
                   ? profile.contactName
                   : order.approvedBy,
               approvedAt:
-                nextStatus === 'pending-payment' && profile.role === 'admin'
+                nextStatus === 'pending-payment' && !isPersonalContext && profile.role === 'admin'
                   ? updatedAt
                   : undefined,
               updatedAt,
@@ -940,13 +1287,61 @@ export const useProcurementStore = create<ProcurementState>()(
           enterpriseId: item.enterpriseId ?? defaultProfile.enterpriseId,
           companyName: item.companyName ?? defaultProfile.companyName,
         });
-        const profile = {
+        const legacyProfile = {
           ...defaultProfile,
           ...persisted.profile,
           companyName: normalizeCompanyText(persisted.profile?.companyName),
           contactName:
             normalizeMockPersonName(persisted.profile?.contactName) ?? defaultProfile.contactName,
         };
+        const account: UserAccount | null =
+          persisted.account ??
+          (persisted.isAuthenticated
+            ? {
+                id: accountIdForEmail(legacyProfile.email),
+                name: legacyProfile.contactName,
+                phone: legacyProfile.phone,
+                email: normalizeAccountEmail(legacyProfile.email),
+              }
+            : null);
+        const discoveredContexts = account
+          ? contextsForAccount(account, useAdminStore.getState().members, {
+              name: legacyProfile.contactName,
+              email: legacyProfile.email,
+              phone: legacyProfile.phone,
+              role: legacyProfile.role,
+              enterpriseId: isPersonalProfile(legacyProfile)
+                ? undefined
+                : legacyProfile.enterpriseId,
+              companyName: legacyProfile.companyName,
+            })
+          : [];
+        const purchaseContexts = account
+          ? discoveredContexts.length > 0
+            ? discoveredContexts
+            : (persisted.purchaseContexts ?? [])
+          : [];
+        const activePurchaseContext =
+          purchaseContexts.find(
+            (context) => context.contextId === persisted.activePurchaseContextId,
+          ) ??
+          purchaseContexts.find(
+            (context) =>
+              context.kind === 'organization' &&
+              context.enterpriseId === legacyProfile.enterpriseId,
+          ) ??
+          purchaseContexts[0] ??
+          null;
+        const profile =
+          account && activePurchaseContext
+            ? profileForContext(
+                account,
+                activePurchaseContext,
+                persisted.isAuthenticated
+                  ? (legacyProfile.signedInAt ?? new Date().toISOString())
+                  : '',
+              )
+            : legacyProfile;
         const checkoutDrafts: Record<string, CheckoutDraft> = {
           [defaultProfile.enterpriseId]: {
             ...defaultDraft,
@@ -965,6 +1360,11 @@ export const useProcurementStore = create<ProcurementState>()(
         return {
           ...currentState,
           ...persisted,
+          account,
+          registeredAccounts: persisted.registeredAccounts ?? [],
+          purchaseContexts,
+          activePurchaseContextId: activePurchaseContext?.contextId ?? null,
+          activePurchaseContext,
           profile,
           checkoutDraft,
           checkoutDrafts: {
@@ -977,6 +1377,10 @@ export const useProcurementStore = create<ProcurementState>()(
           ).map((address) =>
             withDefaultEnterprise({
               ...address,
+              purchaseContextId:
+                address.purchaseContextId ??
+                `organization:${address.enterpriseId ?? defaultProfile.enterpriseId}`,
+              purchaseContextKind: address.purchaseContextKind ?? 'organization',
               recipient: normalizeMockPersonName(address.recipient) ?? address.recipient,
             }),
           ),
@@ -984,6 +1388,10 @@ export const useProcurementStore = create<ProcurementState>()(
             ? persisted.invoiceProfiles.map((invoice) =>
                 withDefaultEnterprise({
                   ...invoice,
+                  purchaseContextId:
+                    invoice.purchaseContextId ??
+                    `organization:${invoice.enterpriseId ?? defaultProfile.enterpriseId}`,
+                  purchaseContextKind: invoice.purchaseContextKind ?? 'organization',
                   title: normalizeCompanyText(invoice.title, profile.companyName),
                   label: normalizeCompanyText(invoice.label, profile.companyName),
                   companyName: normalizeCompanyText(invoice.companyName, profile.companyName),
@@ -992,7 +1400,15 @@ export const useProcurementStore = create<ProcurementState>()(
             : sharedInvoiceProfiles,
           orders: mergeDefaultRecords(persisted.orders, sharedOrders, (order) => order.orderNo)
             .map(normalizeOrderApproval)
-            .map(withDefaultEnterprise),
+            .map(withDefaultEnterprise)
+            .map((order) => ({
+              ...order,
+              purchaseContextId:
+                order.purchaseContextId ??
+                `organization:${order.enterpriseId ?? defaultProfile.enterpriseId}`,
+              purchaseContextKind: order.purchaseContextKind ?? 'organization',
+              buyerDisplayName: order.buyerDisplayName ?? order.companyName,
+            })),
           quoteRequests: mergeDefaultRecords(
             persisted.quoteRequests,
             sharedQuoteRequests,

@@ -6,6 +6,40 @@
 
 ---
 
+## v0.2.0 — 个人购买与多组织身份
+
+发布日期：2026-08-02
+
+本版本补齐了个人用户购买能力，并将商城账户与实际购买身份分离：
+
+- 开放个人账户注册，Maker 等个人用户可直接注册、选购和下单。
+- 企业受邀成员登录后直接进入所属组织；单组织用户无需额外选择身份。
+- 同一账户可同时拥有个人身份和多个企业组织身份，并在账户菜单中切换。
+- 身份列表采用二级菜单按需展示，一级菜单只显示当前身份，避免暴露其他组织信息。
+- 购物车、订单、地址和发票资料按购买身份隔离，切换身份不会混用交易数据。
+- 个人购买使用个人结算链路；企业购买继续保留组织资料、角色权限和审批逻辑。
+- 桌面端支持侧向二级菜单与键盘操作，移动端使用独立第二层菜单并提供返回入口。
+
+下表直接引用完整验收截图；Markdown 预览会按表格列宽缩小展示，右键图片可打开原始尺寸。
+
+| 功能说明                                                                           | 对应界面                                                                                       |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **登录入口**：企业受邀成员直接登录所属组织，同时提供个人注册入口。                 | ![商城登录入口](./docs/verification/identity-context/01-login.png)                             |
+| **个人注册**：Maker 等个人用户可填写基本资料，自主创建商城账户。                   | ![个人用户注册](./docs/verification/identity-context/02-personal-registration.png)             |
+| **个人账户**：注册后直接进入个人购买身份，不要求加入企业组织。                     | ![个人账户中心](./docs/verification/identity-context/03-personal-account.png)                  |
+| **隐私友好的一级菜单**：只显示当前购买身份，不直接暴露其他组织名称。               | ![购买身份一级菜单](./docs/verification/identity-context/04-account-menu-private-default.png)  |
+| **多身份切换**：二级菜单按需列出个人身份和多个企业组织，当前身份使用右侧勾选标识。 | ![购买身份二级菜单](./docs/verification/identity-context/04-multi-context-account-menu.png)    |
+| **个人结算资料**：个人购买使用独立的收货、付款和发票资料，不进入企业审批链路。     | ![个人结算付款资料](./docs/verification/identity-context/05-personal-checkout-payment.png)     |
+| **个人订单提交**：结算页明确当前购买身份，并按个人链路直接提交订单。               | ![个人订单提交](./docs/verification/identity-context/06-personal-checkout-submit.png)          |
+| **移动端一级菜单**：窄屏下同样默认隐藏其他购买身份。                               | ![移动端购买身份一级菜单](./docs/verification/identity-context/07-mobile-account-menu.png)     |
+| **移动端二级菜单**：使用独立第二层列表，并提供返回账户菜单的触控入口。             | ![移动端购买身份二级菜单](./docs/verification/identity-context/07b-mobile-context-submenu.png) |
+| **个人订单详情**：订单快照记录下单时的购买身份、地址和交易资料。                   | ![个人订单详情](./docs/verification/identity-context/08-personal-order-detail.png)             |
+| **个人订单列表**：订单中心只展示当前购买身份下的订单，避免跨组织混用。             | ![个人订单列表](./docs/verification/identity-context/09-personal-orders.png)                   |
+
+完整验收截图见 [`docs/verification/identity-context/`](docs/verification/identity-context/)。
+
+---
+
 ## 快速开始
 
 ```bash
@@ -78,7 +112,9 @@ messages/
 ## 关键约定
 
 ### 1. 颜色和字号
+
 **只用 Tailwind 类，不写 inline 颜色。** 全部 token 在 `src/app/globals.css` 的 `@theme inline` 块定义，常见类名：
+
 - 品牌色：`bg-brand-500` / `text-brand-500` / `bg-brand-soft` / `text-brand-400`
 - 主题色：`bg-bg-app` / `bg-bg-elevated` / `bg-bg-control` / `bg-bg-surface`
 - 文字：`text-text-strong` / `text-text` / `text-text-muted`
@@ -87,21 +123,26 @@ messages/
 完整列表见 `docs/design/DESIGN-TOKENS.md`。
 
 ### 2. 主题切换
+
 `html.light` / `html.dark` 两套语义变量，由 `next-themes` 切换。`<html>` class 改了就生效。
 
 ### 3. 国际化
+
 - **路由层**：`/zh` `/en` 前缀，middleware 自动处理 `/` → `/zh` 重定向
 - **服务端**：`getTranslations('namespace')` 用于 RSC
 - **客户端**：`useTranslations('namespace')` 用于 client component
 - **添加新文案**：先在两个 `messages/*.json` 加 key，再在代码里用
 
 ### 4. 按钮
+
 直接用 `<Button variant="primary">` 等 4 套之一，**不要再用 shadcn 默认 6 个 variant**。完整定义在 `src/components/ui/button.tsx`。
 
 ### 5. 状态徽标
+
 `<Badge variant="in-stock">` 等 10 种之一。完整定义在 `src/components/ui/badge.tsx`。
 
 ### 6. 购物车
+
 ```tsx
 import { useCartSafe } from '@/hooks/use-cart';
 const { items, count, hydrated, add, remove, setQty, clear } = useCartSafe();

@@ -14,5 +14,10 @@ export type {
   OrderStatus,
   OsHandoffStatus,
   PaymentMethod,
+  PurchaseContext,
+  PurchaseContextKind,
+  PersonalPurchaseContext,
+  OrganizationPurchaseContext,
   QuoteStatus,
+  UserAccount,
 } from '@hitbot/domain';

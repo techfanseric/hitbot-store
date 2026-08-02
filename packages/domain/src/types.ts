@@ -78,6 +78,8 @@ export interface CartItem {
 }
 
 export interface CartProject {
+  purchaseContextId?: string;
+  purchaseContextKind?: PurchaseContextKind;
   enterpriseId?: string;
   companyName?: string;
   projectId: string;
@@ -104,6 +106,7 @@ export interface OsBomImportInput {
 }
 
 export type EnterpriseRole = 'admin' | 'buyer' | 'engineer';
+export type PurchaseContextKind = 'personal' | 'organization';
 export type PaymentMethod = 'corporate' | 'personal';
 export type ApprovalMode = 'buyer-review' | 'admin-review' | 'admin-direct' | 'not-required';
 export type OrderStatus =
@@ -116,6 +119,33 @@ export type OrderStatus =
   | 'completed';
 export type QuoteStatus = 'pending-quote' | 'quoted' | 'accepted';
 export type OsHandoffStatus = 'pending' | 'accepted' | 'submitted';
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  registeredAt?: string;
+}
+
+export interface PersonalPurchaseContext {
+  contextId: string;
+  kind: 'personal';
+  displayName: string;
+  accountId: string;
+}
+
+export interface OrganizationPurchaseContext {
+  contextId: string;
+  kind: 'organization';
+  displayName: string;
+  enterpriseId: string;
+  companyName: string;
+  membershipId: string;
+  role: EnterpriseRole;
+}
+
+export type PurchaseContext = PersonalPurchaseContext | OrganizationPurchaseContext;
 
 export interface EnterpriseProfile {
   enterpriseId: string;
@@ -158,6 +188,8 @@ export interface OrderInvoiceSnapshot {
 
 export interface AddressProfile extends OrderAddressSnapshot {
   id: string;
+  purchaseContextId?: string;
+  purchaseContextKind?: PurchaseContextKind;
   enterpriseId?: string;
   companyName?: string;
   label: string;
@@ -166,6 +198,8 @@ export interface AddressProfile extends OrderAddressSnapshot {
 
 export interface InvoiceProfile extends OrderInvoiceSnapshot {
   id: string;
+  purchaseContextId?: string;
+  purchaseContextKind?: PurchaseContextKind;
   enterpriseId?: string;
   companyName?: string;
   label: string;
@@ -189,6 +223,9 @@ export interface OrderLineSnapshot {
 
 export interface LocalOrderSnapshot {
   orderNo: string;
+  purchaseContextId?: string;
+  purchaseContextKind?: PurchaseContextKind;
+  buyerDisplayName?: string;
   enterpriseId?: string;
   companyName?: string;
   projectId?: string;

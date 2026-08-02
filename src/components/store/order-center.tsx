@@ -71,12 +71,14 @@ export function OrderCenter() {
   const [visibleOrderCount, setVisibleOrderCount] = useState(ORDER_PAGE_SIZE);
   const {
     isAuthenticated,
+    activePurchaseContext,
     profile,
     orders,
     approveLocalOrder,
     markLocalOrderPaid,
     advanceLocalOrder,
   } = useProcurementStore();
+  const isPersonalContext = activePurchaseContext?.kind === 'personal';
   const adminMembers = useAdminStore((state) => state.members);
   const approvalSettings = useAdminStore((state) => state.approvalSettings);
   const enterpriseOrders = useMemo(
@@ -145,23 +147,25 @@ export function OrderCenter() {
       enterpriseOrders.filter(
         (order) =>
           order.status === 'pending-payment' &&
-          canHandleWorkflowRole(
-            profile,
-            enterpriseApprovalSettings,
-            adminMembers,
-            'paymentInvoice',
-          ),
+          (isPersonalContext ||
+            canHandleWorkflowRole(
+              profile,
+              enterpriseApprovalSettings,
+              adminMembers,
+              'paymentInvoice',
+            )),
       ),
-    [adminMembers, enterpriseApprovalSettings, enterpriseOrders, profile],
+    [adminMembers, enterpriseApprovalSettings, enterpriseOrders, isPersonalContext, profile],
   );
   const receivableOrders = useMemo(
     () =>
       enterpriseOrders.filter(
         (order) =>
           order.status === 'shipped' &&
-          canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'logistics'),
+          (isPersonalContext ||
+            canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'logistics')),
       ),
-    [adminMembers, enterpriseApprovalSettings, enterpriseOrders, profile],
+    [adminMembers, enterpriseApprovalSettings, enterpriseOrders, isPersonalContext, profile],
   );
 
   useEffect(() => {
@@ -230,14 +234,16 @@ export function OrderCenter() {
             <div className="flex items-center gap-2.5">
               <ClipboardCheck className="text-brand-500 size-4 md:size-5" />
               <h2 className="text-text-strong text-base font-semibold md:text-xl">
-                {t('workspaceTitle')}
+                {t(isPersonalContext ? 'personalWorkspaceTitle' : 'workspaceTitle')}
               </h2>
             </div>
             <p className="text-text-muted mt-1 hidden max-w-3xl text-sm leading-relaxed xl:block">
-              {t('workspaceHint', {
-                company: profile.companyName,
-                role: tAccount(profile.role),
-              })}
+              {isPersonalContext
+                ? t('personalWorkspaceHint', { name: profile.contactName })
+                : t('workspaceHint', {
+                    company: profile.companyName,
+                    role: tAccount(profile.role),
+                  })}
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -249,7 +255,7 @@ export function OrderCenter() {
             </Button>
             <Button variant="secondary" size="sm" className="h-[36px] px-3" asChild>
               <Link href={`/${locale}/account`}>
-                <span>{t('openWorkspace')}</span>
+                <span>{t(isPersonalContext ? 'openAccount' : 'openWorkspace')}</span>
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
@@ -439,22 +445,24 @@ export function OrderCenter() {
                     canPay={
                       isAuthenticated &&
                       order.status === 'pending-payment' &&
-                      canHandleWorkflowRole(
-                        profile,
-                        enterpriseApprovalSettings,
-                        adminMembers,
-                        'paymentInvoice',
-                      )
+                      (isPersonalContext ||
+                        canHandleWorkflowRole(
+                          profile,
+                          enterpriseApprovalSettings,
+                          adminMembers,
+                          'paymentInvoice',
+                        ))
                     }
                     canAdvance={
                       isAuthenticated &&
                       order.status === 'shipped' &&
-                      canHandleWorkflowRole(
-                        profile,
-                        enterpriseApprovalSettings,
-                        adminMembers,
-                        'logistics',
-                      )
+                      (isPersonalContext ||
+                        canHandleWorkflowRole(
+                          profile,
+                          enterpriseApprovalSettings,
+                          adminMembers,
+                          'logistics',
+                        ))
                     }
                     onApprove={() => approveLocalOrder(order.orderNo)}
                     onPay={() => markLocalOrderPaid(order.orderNo)}
@@ -469,7 +477,9 @@ export function OrderCenter() {
                         ? tAccount('approvedBy', { name: order.approvedBy })
                         : order.approver
                           ? tAccount('assignedTo', { name: order.approver })
-                          : tAccount('approvalUnassigned'),
+                          : order.approvalMode === 'not-required'
+                            ? tAccount('approvalNotRequiredOwner')
+                            : tAccount('approvalUnassigned'),
                       payment:
                         order.status === 'pending-quote'
                           ? tAccount('quoteEstimate')
