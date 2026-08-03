@@ -8,7 +8,9 @@ import type {
   AdminAuditLog,
   AdminApprovalSettings,
   AdminAuditModule,
+  AdminInvitationJoinResult,
   AdminEnterpriseAccessRequest,
+  AdminOrganizationInvitation,
   AdminMember,
   AdminPermission,
   AdminProductRecord,
@@ -41,6 +43,28 @@ interface InviteMemberInput {
   companyName?: string;
 }
 
+export interface CreateOrganizationInvitationInput {
+  enterpriseId: string;
+  companyName: string;
+  expiresAt: string;
+  maxUses: number | null;
+  roleName: string;
+  permissions: AdminPermission[];
+}
+
+export interface JoinOrganizationFromInvitationInput {
+  token: string;
+  name: string;
+  email: string;
+  phone: string;
+}
+
+export interface JoinOrganizationFromInvitationOutcome {
+  result: AdminInvitationJoinResult;
+  enterpriseId?: string;
+  memberId?: string;
+}
+
 interface UpdateMemberProfileInput {
   name?: string;
   email?: string;
@@ -53,6 +77,7 @@ interface AdminState {
   members: AdminMember[];
   approvalSettings: AdminApprovalSettings[];
   enterpriseAccessRequests: AdminEnterpriseAccessRequest[];
+  organizationInvitations: AdminOrganizationInvitation[];
   auditLogs: AdminAuditLog[];
   updateProductRecord: (productId: string, patch: UpdateProductInput, actor?: string) => void;
   publishProductRecord: (productId: string, actor?: string) => void;
@@ -60,8 +85,14 @@ interface AdminState {
   submitEnterpriseAccessRequest: (
     input: Omit<AdminEnterpriseAccessRequest, 'id' | 'status' | 'requestedAt'>,
   ) => void;
-  approveEnterpriseAccessRequest: (requestId: string, actor?: string) => void;
-  rejectEnterpriseAccessRequest: (requestId: string, actor?: string) => void;
+  createOrganizationInvitation: (
+    input: CreateOrganizationInvitationInput,
+    actor?: string,
+  ) => AdminOrganizationInvitation | null;
+  revokeOrganizationInvitation: (invitationId: string, actor?: string) => void;
+  joinOrganizationFromInvitation: (
+    input: JoinOrganizationFromInvitationInput,
+  ) => JoinOrganizationFromInvitationOutcome;
   updateEnterpriseProfile: (enterpriseId: string, companyName: string, actor?: string) => void;
   updateMemberProfile: (memberId: string, patch: UpdateMemberProfileInput, actor?: string) => void;
   updateMemberRoleName: (memberId: string, roleName: string, actor?: string) => void;
@@ -78,6 +109,7 @@ interface AdminState {
     enterprise?: Pick<AdminMember, 'enterpriseId' | 'companyName'>,
   ) => void;
   activateMember: (memberId: string, actor?: string) => void;
+  setMemberStatus: (memberId: string, status: 'active' | 'suspended', actor?: string) => boolean;
   appendAuditLog: (input: AuditInput) => void;
 }
 
@@ -89,11 +121,6 @@ function nextAuditId() {
   const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 17);
   const suffix = Math.random().toString(36).slice(2, 5).toUpperCase();
   return `AUD${stamp}${suffix}`;
-}
-
-function nextEnterpriseId() {
-  const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 12);
-  return `HB-CORP-${stamp}`;
 }
 
 function auditEntry(input: AuditInput): AdminAuditLog {
@@ -139,6 +166,61 @@ function roleForPermissions(permissions: AdminPermission[]): EnterpriseRole {
 function normalizeCompanyName(value: string | undefined, fallback = '深圳智造装备有限公司') {
   if (!value || value.includes('示例公司') || value.includes('DEMO')) return fallback;
   return value;
+}
+
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function normalizePhone(value: string) {
+  const trimmed = value.trim();
+  const prefix = trimmed.startsWith('+') ? '+' : '';
+  return `${prefix}${trimmed.replace(/\D/g, '')}`;
+}
+
+function randomCodePart(length: number) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(length);
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes, (value) => alphabet[value % alphabet.length]).join('');
+}
+
+function generateInvitationToken(existing: AdminOrganizationInvitation[]) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const token = `HITBOT-${randomCodePart(4)}-${randomCodePart(4)}`;
+    if (!existing.some((invitation) => invitation.token === token)) return token;
+  }
+  return `HITBOT-${Date.now().toString(36).toUpperCase()}-${randomCodePart(4)}`;
+}
+
+function normalizeInvitationToken(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function invitationHasCapacity(invitation: AdminOrganizationInvitation) {
+  return invitation.maxUses === null || invitation.joinedUses < invitation.maxUses;
+}
+
+export type OrganizationInvitationAvailability = 'active' | 'expired' | 'revoked' | 'exhausted';
+
+export function organizationInvitationAvailability(
+  invitation: AdminOrganizationInvitation,
+): OrganizationInvitationAvailability {
+  if (invitation.revokedAt) return 'revoked';
+  if (Date.parse(invitation.expiresAt) <= Date.now()) return 'expired';
+  if (!invitationHasCapacity(invitation)) return 'exhausted';
+  return 'active';
+}
+
+function memberIdFor(enterpriseId: string) {
+  const safeEnterpriseId = enterpriseId.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return `member-${safeEnterpriseId}-${Date.now()}-${randomCodePart(3).toLowerCase()}`;
 }
 
 const defaultProductRecords: AdminProductRecord[] = products.map((product) => ({
@@ -306,11 +388,12 @@ function productAuditTarget(productId: string) {
 
 export const useAdminStore = create<AdminState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       productRecords: defaultProductRecords,
       members: defaultMembers,
       approvalSettings: defaultApprovalSettings,
       enterpriseAccessRequests: [],
+      organizationInvitations: [],
       auditLogs: [],
       updateProductRecord: (productId, patch, actor = 'System') =>
         set((state) => ({
@@ -398,101 +481,147 @@ export const useAdminStore = create<AdminState>()(
             }),
           };
         }),
-      approveEnterpriseAccessRequest: (requestId, actor = 'System') =>
+      createOrganizationInvitation: (input, actor = 'System') => {
+        let createdInvitation: AdminOrganizationInvitation | null = null;
         set((state) => {
-          const request = state.enterpriseAccessRequests.find((item) => item.id === requestId);
-          if (!request || request.status !== 'pending') return state;
+          const expiresAt = new Date(input.expiresAt);
+          if (
+            !input.enterpriseId ||
+            !input.roleName.trim() ||
+            !Number.isFinite(expiresAt.getTime()) ||
+            expiresAt <= new Date()
+          ) {
+            return state;
+          }
 
-          const timestamp = now();
-          const enterpriseId = request.enterpriseId ?? nextEnterpriseId();
-          const existingMembership = state.members.find(
-            (member) =>
-              member.email.toLowerCase() === request.email.toLowerCase() &&
-              (member.enterpriseId ?? 'ENT-HITBOT-CUSTOMER') === enterpriseId,
+          const maxUses =
+            input.maxUses === null || !Number.isFinite(input.maxUses)
+              ? null
+              : Math.max(1, Math.floor(input.maxUses));
+          createdInvitation = {
+            id: `invitation-${Date.now()}-${randomCodePart(3).toLowerCase()}`,
+            token: generateInvitationToken(state.organizationInvitations),
+            enterpriseId: input.enterpriseId,
+            companyName: input.companyName.trim(),
+            createdBy: actor,
+            createdAt: now(),
+            expiresAt: expiresAt.toISOString(),
+            maxUses,
+            joinedUses: 0,
+            roleName: input.roleName.trim(),
+            permissions: normalizePermissions(input.permissions),
+          };
+
+          return {
+            organizationInvitations: [createdInvitation, ...state.organizationInvitations].slice(
+              0,
+              100,
+            ),
+            auditLogs: appendAudit(state.auditLogs, {
+              module: 'memberships',
+              action: 'invitation-create',
+              actor,
+              target: createdInvitation.id,
+              summary: `${input.enterpriseId}:${createdInvitation.expiresAt}`,
+            }),
+          };
+        });
+        return createdInvitation;
+      },
+      revokeOrganizationInvitation: (invitationId, actor = 'System') =>
+        set((state) => {
+          const invitation = state.organizationInvitations.find((item) => item.id === invitationId);
+          if (!invitation || invitation.revokedAt) return state;
+          return {
+            organizationInvitations: state.organizationInvitations.map((item) =>
+              item.id === invitationId ? { ...item, revokedAt: now(), revokedBy: actor } : item,
+            ),
+            auditLogs: appendAudit(state.auditLogs, {
+              module: 'memberships',
+              action: 'invitation-revoke',
+              actor,
+              target: invitationId,
+              summary: invitation.token,
+            }),
+          };
+        }),
+      joinOrganizationFromInvitation: (input) => {
+        const state = get();
+        const phone = normalizePhone(input.phone);
+        if (!/^\+?\d{7,15}$/.test(phone)) return { result: 'invalid-phone' };
+
+        const invitation = state.organizationInvitations.find(
+          (item) => item.token === normalizeInvitationToken(input.token),
+        );
+        if (!invitation) return { result: 'invalid-link' };
+
+        const availability = organizationInvitationAvailability(invitation);
+        if (availability !== 'active') {
+          return { result: availability, enterpriseId: invitation.enterpriseId };
+        }
+
+        const existingMember = state.members.find(
+          (member) =>
+            member.enterpriseId === invitation.enterpriseId &&
+            normalizePhone(member.phone ?? '') === phone &&
+            member.status === 'active',
+        );
+        if (existingMember) {
+          return {
+            result: 'already-member',
+            enterpriseId: invitation.enterpriseId,
+            memberId: existingMember.id,
+          };
+        }
+
+        const permissions = normalizePermissions(invitation.permissions);
+        const joinedAt = now();
+        const member: AdminMember = {
+          id: memberIdFor(invitation.enterpriseId),
+          enterpriseId: invitation.enterpriseId,
+          companyName: invitation.companyName,
+          name: input.name.trim() || `成员 ${phone.slice(-4)}`,
+          email: normalizeEmail(input.email) || `${phone.replace(/\D/g, '')}@phone.hitbot.local`,
+          phone,
+          role: roleForPermissions(permissions),
+          roleName: invitation.roleName,
+          status: 'active',
+          permissions,
+          updatedAt: joinedAt,
+        };
+
+        set((current) => {
+          const latestInvitation = current.organizationInvitations.find(
+            (item) => item.id === invitation.id,
           );
-          const approvedRequest: AdminEnterpriseAccessRequest = {
-            ...request,
-            status: 'approved',
-            reviewedAt: timestamp,
-            reviewedBy: actor,
-            enterpriseId,
-          };
-          const enterpriseAdmin: AdminMember = {
-            id: existingMembership?.id ?? `member-enterprise-${Date.now()}`,
-            enterpriseId,
-            companyName: request.companyName,
-            name: request.contactName || request.companyName,
-            email: request.email,
-            phone: request.phone,
-            role: 'admin',
-            roleName: '企业管理员',
-            status: 'active',
-            permissions: defaultPermissionsForRole('admin'),
-            updatedAt: timestamp,
-          };
+          if (
+            !latestInvitation ||
+            organizationInvitationAvailability(latestInvitation) !== 'active'
+          ) {
+            return current;
+          }
 
           return {
-            enterpriseAccessRequests: state.enterpriseAccessRequests.map((item) =>
-              item.id === requestId ? approvedRequest : item,
+            members: [...current.members, member],
+            organizationInvitations: current.organizationInvitations.map((item) =>
+              item.id === invitation.id ? { ...item, joinedUses: item.joinedUses + 1 } : item,
             ),
-            members: existingMembership
-              ? state.members.map((member) =>
-                  member.id === existingMembership.id ? { ...member, ...enterpriseAdmin } : member,
-                )
-              : [...state.members, enterpriseAdmin],
-            approvalSettings: state.approvalSettings.some(
-              (settings) => settings.enterpriseId === enterpriseId,
-            )
-              ? state.approvalSettings
-              : [
-                  ...state.approvalSettings,
-                  {
-                    enterpriseId,
-                    defaultApproverMemberId: enterpriseAdmin.id,
-                    orderReviewerMemberId: enterpriseAdmin.id,
-                    deliveryOwnerMemberId: enterpriseAdmin.id,
-                    paymentInvoiceOwnerMemberId: enterpriseAdmin.id,
-                    logisticsOwnerMemberId: enterpriseAdmin.id,
-                    requireBuyerOrderApproval: true,
-                    requireQuoteOrderApproval: true,
-                    amountThresholdCents: null,
-                    updatedAt: timestamp,
-                  },
-                ],
-            auditLogs: appendAudit(state.auditLogs, {
-              module: 'access',
-              action: 'access-approve',
-              actor,
-              target: request.email,
-              summary: `${request.companyName} / ${enterpriseId}`,
+            auditLogs: appendAudit(current.auditLogs, {
+              module: 'memberships',
+              action: 'member-join',
+              actor: member.name,
+              target: member.id,
+              summary: `${phone}:${invitation.enterpriseId}`,
             }),
           };
-        }),
-      rejectEnterpriseAccessRequest: (requestId, actor = 'System') =>
-        set((state) => {
-          const request = state.enterpriseAccessRequests.find((item) => item.id === requestId);
-          if (!request || request.status !== 'pending') return state;
+        });
 
-          return {
-            enterpriseAccessRequests: state.enterpriseAccessRequests.map((item) =>
-              item.id === requestId
-                ? {
-                    ...item,
-                    status: 'rejected',
-                    reviewedAt: now(),
-                    reviewedBy: actor,
-                  }
-                : item,
-            ),
-            auditLogs: appendAudit(state.auditLogs, {
-              module: 'access',
-              action: 'access-reject',
-              actor,
-              target: request.email,
-              summary: request.companyName,
-            }),
-          };
-        }),
+        return {
+          result: 'joined',
+          enterpriseId: invitation.enterpriseId,
+          memberId: member.id,
+        };
+      },
       updateEnterpriseProfile: (enterpriseId, companyName, actor = 'System') =>
         set((state) => {
           const nextCompanyName = companyName.trim();
@@ -663,7 +792,10 @@ export const useAdminStore = create<AdminState>()(
           const timestamp = now();
           const normalizedEmail = input.email.trim().toLowerCase();
           const existingMember = state.members.find(
-            (member) => member.email.toLowerCase() === normalizedEmail,
+            (member) =>
+              member.email.toLowerCase() === normalizedEmail &&
+              (member.enterpriseId ?? 'ENT-HITBOT-CUSTOMER') ===
+                (input.enterpriseId ?? 'ENT-HITBOT-CUSTOMER'),
           );
           const memberId = existingMember?.id ?? `member-${Date.now()}`;
           const permissions = normalizePermissions(input.permissions);
@@ -747,18 +879,77 @@ export const useAdminStore = create<AdminState>()(
             summary: memberId,
           }),
         })),
+      setMemberStatus: (memberId, status, actor = 'System') => {
+        const state = get();
+        const member = state.members.find((item) => item.id === memberId);
+        if (!member || member.status === status) return false;
+        if (status === 'suspended' && member.role === 'admin') {
+          const activeAdmins = state.members.filter(
+            (item) =>
+              item.enterpriseId === member.enterpriseId &&
+              item.role === 'admin' &&
+              item.status === 'active',
+          );
+          if (activeAdmins.length <= 1) return false;
+        }
+
+        set((current) => {
+          const clearSuspendedOwner = (value?: string) =>
+            status === 'suspended' && value === memberId ? '' : value;
+          return {
+            members: current.members.map((item) =>
+              item.id === memberId ? { ...item, status, updatedAt: now() } : item,
+            ),
+            approvalSettings: current.approvalSettings.map((settings) =>
+              settings.enterpriseId === member.enterpriseId
+                ? {
+                    ...settings,
+                    defaultApproverMemberId:
+                      clearSuspendedOwner(settings.defaultApproverMemberId) ?? '',
+                    orderReviewerMemberId: clearSuspendedOwner(settings.orderReviewerMemberId),
+                    deliveryOwnerMemberId: clearSuspendedOwner(settings.deliveryOwnerMemberId),
+                    paymentInvoiceOwnerMemberId: clearSuspendedOwner(
+                      settings.paymentInvoiceOwnerMemberId,
+                    ),
+                    logisticsOwnerMemberId: clearSuspendedOwner(settings.logisticsOwnerMemberId),
+                    updatedAt: now(),
+                  }
+                : settings,
+            ),
+            auditLogs: appendAudit(current.auditLogs, {
+              module: 'memberships',
+              action: status === 'active' ? 'member-restore' : 'member-suspend',
+              actor,
+              target: memberId,
+              summary: member.email,
+            }),
+          };
+        });
+        return true;
+      },
       appendAuditLog: (input) =>
         set((state) => ({
           auditLogs: appendAudit(state.auditLogs, input),
         })),
     }),
     {
-      name: 'hitbot-admin-v1',
+      name: 'hitbot-admin-v4',
       storage: createJSONStorage(() => localStorage),
       merge: (persistedState, currentState) => {
         const persisted = (persistedState ?? {}) as Partial<AdminState>;
         const persistedRecords = persisted.productRecords ?? [];
         const enterpriseAccessRequests = persisted.enterpriseAccessRequests ?? [];
+        const organizationInvitations = (persisted.organizationInvitations ?? []).map(
+          (invitation) => ({
+            ...invitation,
+            joinedUses: Math.max(0, invitation.joinedUses ?? 0),
+            maxUses:
+              invitation.maxUses === null || invitation.maxUses === undefined
+                ? null
+                : Math.max(1, invitation.maxUses),
+            permissions: normalizePermissions(invitation.permissions),
+          }),
+        );
         const productRecords = defaultProductRecords.map((record) => ({
           ...record,
           ...persistedRecords.find((item) => item.productId === record.productId),
@@ -775,12 +966,6 @@ export const useAdminStore = create<AdminState>()(
           : defaultMembers;
         const members = sourceMembers.map((member) => {
           const defaultMember = defaultMembers.find((item) => item.id === member.id);
-          const approvedAccessRequest = enterpriseAccessRequests.find(
-            (request) =>
-              request.status === 'approved' &&
-              request.email.toLowerCase() === member.email.toLowerCase(),
-          );
-
           const mergedRole = defaultMember?.role ?? member.role;
           const roleName =
             member.roleName ??
@@ -795,17 +980,11 @@ export const useAdminStore = create<AdminState>()(
             roleName,
             status: member.status ?? defaultMember?.status,
             enterpriseId:
-              member.enterpriseId ??
-              approvedAccessRequest?.enterpriseId ??
-              defaultMember?.enterpriseId ??
-              'ENT-HITBOT-CUSTOMER',
+              member.enterpriseId ?? defaultMember?.enterpriseId ?? 'ENT-HITBOT-CUSTOMER',
             companyName:
               defaultMember?.companyName ??
-              normalizeCompanyName(
-                member.companyName ?? approvedAccessRequest?.companyName,
-                '深圳智造装备有限公司',
-              ),
-            phone: member.phone ?? defaultMember?.phone ?? approvedAccessRequest?.phone,
+              normalizeCompanyName(member.companyName, '深圳智造装备有限公司'),
+            phone: member.phone ?? defaultMember?.phone,
             permissions: normalizePermissions(member.permissions ?? defaultMember?.permissions),
           };
         });
@@ -813,6 +992,7 @@ export const useAdminStore = create<AdminState>()(
           new Set([
             ...members.map((member) => member.enterpriseId).filter(Boolean),
             ...defaultApprovalSettings.map((settings) => settings.enterpriseId),
+            ...organizationInvitations.map((invitation) => invitation.enterpriseId),
           ]),
         ) as string[];
         const approvalSettings = knownEnterpriseIds.map((enterpriseId) => ({
@@ -828,9 +1008,11 @@ export const useAdminStore = create<AdminState>()(
           members,
           approvalSettings,
           enterpriseAccessRequests,
+          organizationInvitations,
           auditLogs: persisted.auditLogs ?? [],
         };
       },
+      version: 4,
     },
   ),
 );

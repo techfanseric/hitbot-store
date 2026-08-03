@@ -205,7 +205,7 @@ export function OrderCenter() {
               </Link>
             </Button>
             <Button variant="secondary" asChild>
-              <Link href={`/${locale}/account`}>
+              <Link href={`/${locale}/enterprise/apply`}>
                 <span>{t('openAccessRequest')}</span>
                 <ArrowRight className="size-4" />
               </Link>

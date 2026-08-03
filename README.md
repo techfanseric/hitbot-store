@@ -6,6 +6,37 @@
 
 ---
 
+## v0.3.0 — 企业邀请制与成员权限治理
+
+发布日期：2026-08-03
+
+本版本将企业开通和成员加入重构为两条独立流程，并以可传播的邀请链接取代手工输入邀请码：
+
+- 企业开通使用独立的 `/enterprise/apply` 页面，联系人完成手机验证后提交企业资料；个人账户中心不再混入企业开通或加入入口。
+- 企业开通审核属于独立后台业务，商城前台不再提供审核页面或 `/admin` 入口。
+- 企业管理员创建完整邀请链接，链接内携带不可见的邀请凭证，可直接复制传播。
+- 邀请实际保存精确的失效日期与时分；创建表单默认填入当前时间后四小时，并实时计算预计有效时长。
+- 每条邀请链接独立选择岗位与权限，成员加入后继承该链接配置，管理员仍可继续单独调整。
+- 访问有效邀请链接不要求预先登录或注册；填写手机号和验证码后直接加入企业，已有账户自动关联，没有账户则建立最小成员账户。
+- 失效、撤销、人数已满或不存在的链接直接显示不可用状态，不继续展示手机号与验证码表单。
+- 链接邀请不再经过管理员审批，因此移除了成员加入申请、邮箱域名免审、加入审批模式和裸邀请码输入逻辑。
+- 已加入成员支持修改岗位与权限，并可停用或恢复；邀请链接、成员关系和企业申请使用新的本地数据版本，旧错误流程资料不再回灌。
+
+本版本验收截图以功能区域为主，仅移动端邀请页保留完整视口。
+
+| 功能说明                                                                         | 对应界面                                                                                                             |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **独立企业开通**：企业资料、联系人手机验证和提交状态集中在单独页面。             | ![独立企业开通申请](./docs/verification/screenshots/v0.3.0-organization-membership/01-enterprise-application.png)    |
+| **创建邀请链接**：为链接选择岗位与权限，设置精确失效时间和人数，并复制完整链接。 | ![创建企业邀请链接](./docs/verification/screenshots/v0.3.0-organization-membership/02-invitation-link-created.png)   |
+| **手机号直接加入**：链接已确定企业和岗位，用户只需完成手机号验证。               | ![手机号验证加入企业](./docs/verification/screenshots/v0.3.0-organization-membership/03-phone-verification-join.png) |
+| **不可用链接**：失效、撤销、满员或无效链接不会继续显示加入表单。                 | ![邀请链接不可用](./docs/verification/screenshots/v0.3.0-organization-membership/04-invitation-unavailable.png)      |
+| **成员权限治理**：验证成功的成员立即出现，管理员可继续修改岗位、权限和状态。     | ![成员岗位与权限管理](./docs/verification/screenshots/v0.3.0-organization-membership/05-member-permissions.png)      |
+| **移动端邀请体验**：移动端保持完整的企业信息、手机号验证与直接加入路径。         | ![移动端邀请加入](./docs/verification/screenshots/v0.3.0-organization-membership/06-mobile-invite-join.png)          |
+
+完整验收截图见 [`docs/verification/screenshots/v0.3.0-organization-membership/`](docs/verification/screenshots/v0.3.0-organization-membership/)。
+
+---
+
 ## v0.2.0 — 个人购买与多组织身份
 
 发布日期：2026-08-02

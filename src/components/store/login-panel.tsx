@@ -3,10 +3,13 @@
 import { useMemo, useState } from 'react';
 import type React from 'react';
 import { Building2, LockKeyhole, LogIn, Mail, Phone, User, UserPlus } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAdminHydrated } from '@/hooks/use-admin-hydrated';
+import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
 import { useAdminStore } from '@/lib/admin-store';
 import { useProcurementStore } from '@/lib/procurement-store';
 import { cn } from '@/lib/utils';
@@ -23,6 +26,9 @@ export function LoginPanel({ next }: { next?: string }) {
   const t = useTranslations('Login');
   const locale = useLocale();
   const router = useRouter();
+  const adminHydrated = useAdminHydrated();
+  const procurementHydrated = useProcurementHydrated();
+  const storesHydrated = adminHydrated && procurementHydrated;
   const members = useAdminStore((state) => state.members);
   const registeredAccounts = useProcurementStore((state) => state.registeredAccounts);
   const loginAccount = useProcurementStore((state) => state.loginAccount);
@@ -103,7 +109,7 @@ export function LoginPanel({ next }: { next?: string }) {
   function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoginError('');
-    if (!password.trim() || !loginAccount(username)) {
+    if (!storesHydrated || !password.trim() || !loginAccount(username)) {
       setLoginError(t('loginError'));
       return;
     }
@@ -114,6 +120,7 @@ export function LoginPanel({ next }: { next?: string }) {
     event.preventDefault();
     setRegistrationError('');
     if (
+      !storesHydrated ||
       !registration.name.trim() ||
       !registration.email.trim() ||
       !registration.phone.trim() ||
@@ -254,7 +261,7 @@ export function LoginPanel({ next }: { next?: string }) {
               type="submit"
               variant="primary"
               className="w-full"
-              disabled={!selectedAccount || !password.trim()}
+              disabled={!storesHydrated || !selectedAccount || !password.trim()}
             >
               <LogIn className="size-4" />
               <span>{t('enter')}</span>
@@ -319,7 +326,7 @@ export function LoginPanel({ next }: { next?: string }) {
 
             {registrationError && <p className="text-brand-500 text-sm">{registrationError}</p>}
 
-            <Button type="submit" variant="primary" className="w-full">
+            <Button type="submit" variant="primary" className="w-full" disabled={!storesHydrated}>
               <UserPlus className="size-4" />
               <span>{t('createAccount')}</span>
             </Button>
@@ -327,6 +334,19 @@ export function LoginPanel({ next }: { next?: string }) {
           </form>
         )}
       </section>
+
+      <div className="border-divider mt-5 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <Building2 className="text-brand-500 mt-0.5 size-5 shrink-0" />
+          <div>
+            <p className="text-text-strong text-sm font-semibold">{t('enterpriseApplyTitle')}</p>
+            <p className="text-text-muted mt-1 text-xs leading-5">{t('enterpriseApplyHint')}</p>
+          </div>
+        </div>
+        <Button asChild variant="secondary" className="shrink-0">
+          <Link href={`/${locale}/enterprise/apply`}>{t('enterpriseApplyCta')}</Link>
+        </Button>
+      </div>
     </div>
   );
 }

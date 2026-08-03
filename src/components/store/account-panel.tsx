@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import Link from 'next/link';
 import {
-  Building2,
   ChevronDown,
   CircleDollarSign,
   ClipboardCheck,
@@ -16,7 +15,6 @@ import {
   LogOut,
   ReceiptText,
   Save,
-  Send,
   ShieldCheck,
   Trash2,
   UserCog,
@@ -33,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useAdminHydrated } from '@/hooks/use-admin-hydrated';
 import { useProcurementHydrated } from '@/hooks/use-procurement-hydrated';
 import { approvalSettingsForEnterprise, useAdminStore } from '@/lib/admin-store';
 import { formatPrice } from '@/lib/format';
@@ -47,6 +46,8 @@ import { cn } from '@/lib/utils';
 import { PartClassBadge } from './part-class-badge';
 import { OrderTimeFilterControl } from './order-time-filter-control';
 import { ApprovalFlow, type ApprovalFlowStep } from './approval-flow';
+import { EnterpriseSettingsPanel } from './enterprise-settings-panel';
+import { OrganizationMembersPanel } from './organization-members-panel';
 import type { AdminApprovalSettings, AdminMember, AdminPermission } from '@/types/admin';
 import type {
   CheckoutDraft,
@@ -58,7 +59,7 @@ import type {
 import type { EnterpriseProfile, OrderStatus } from '@/types/procurement';
 
 type OrderStatusFilter = 'all' | OrderStatus;
-type AccountTab = 'overview' | 'orders' | 'invoices' | 'members' | 'approval';
+type AccountTab = 'overview' | 'orders' | 'invoices' | 'members' | 'settings' | 'approval';
 const ACCOUNT_ORDER_PAGE_SIZE = 8;
 type MemberFormState = {
   name: string;
@@ -83,7 +84,9 @@ function canApproveOrder(profile: EnterpriseProfile, order: LocalOrderSnapshot) 
 export function AccountPanel() {
   const t = useTranslations('Account');
   const locale = useLocale();
+  const adminHydrated = useAdminHydrated();
   const authHydrated = useProcurementHydrated();
+  const storesHydrated = adminHydrated && authHydrated;
   const [activeTab, setActiveTab] = useState<AccountTab>('overview');
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState('all');
@@ -91,32 +94,8 @@ export function AccountPanel() {
   const [customTimeRange, setCustomTimeRange] = useState<OrderDateRange>({});
   const [visibleOrderCount, setVisibleOrderCount] = useState(ACCOUNT_ORDER_PAGE_SIZE);
   const [orderFiltersOpen, setOrderFiltersOpen] = useState(false);
-  const [accessForm, setAccessForm] = useState({
-    companyName: '',
-    contactName: '',
-    phone: '',
-    email: '',
-    intent: '',
-  });
-  const [memberForm, setMemberForm] = useState<MemberFormState>({
-    name: '',
-    email: '',
-    phone: '',
-    roleName: '',
-    permissions: [],
-  });
   const members = useAdminStore((state) => state.members);
   const approvalSettings = useAdminStore((state) => state.approvalSettings);
-  const enterpriseAccessRequests = useAdminStore((state) => state.enterpriseAccessRequests);
-  const submitEnterpriseAccessRequest = useAdminStore(
-    (state) => state.submitEnterpriseAccessRequest,
-  );
-  const inviteMember = useAdminStore((state) => state.inviteMember);
-  const activateMember = useAdminStore((state) => state.activateMember);
-  const toggleMemberPermission = useAdminStore((state) => state.toggleMemberPermission);
-  const deleteMember = useAdminStore((state) => state.deleteMember);
-  const updateEnterpriseProfile = useAdminStore((state) => state.updateEnterpriseProfile);
-  const updateMemberProfile = useAdminStore((state) => state.updateMemberProfile);
   const updateApprovalSettings = useAdminStore((state) => state.updateApprovalSettings);
   const {
     isAuthenticated,
@@ -294,27 +273,11 @@ export function AccountPanel() {
     ...(isEnterpriseAdmin
       ? [
           { key: 'members' as const, label: t('tabMembers') },
+          { key: 'settings' as const, label: t('tabSettings') },
           { key: 'approval' as const, label: t('tabApproval') },
         ]
       : []),
   ];
-  const accessLookupEmail = accessForm.email.trim().toLowerCase();
-  const latestAccessRequest = useMemo(
-    () =>
-      accessLookupEmail
-        ? enterpriseAccessRequests.find(
-            (request) => request.email.toLowerCase() === accessLookupEmail,
-          )
-        : undefined,
-    [accessLookupEmail, enterpriseAccessRequests],
-  );
-  const canSubmitAccessRequest = Boolean(
-    accessForm.companyName.trim() &&
-    accessForm.contactName.trim() &&
-    accessForm.phone.trim() &&
-    accessForm.email.trim(),
-  );
-
   useEffect(() => {
     if (!isAuthenticated || activePurchaseContext?.kind !== 'organization' || !activeMember) return;
 
@@ -337,36 +300,10 @@ export function AccountPanel() {
     }
   }, [activeMember, activePurchaseContext, isAuthenticated, profile, updateProfile]);
 
-  function handleAccessRequestSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canSubmitAccessRequest) return;
-    submitEnterpriseAccessRequest(accessForm);
-  }
-
-  function handleMemberSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (
-      !memberForm.name.trim() ||
-      !memberForm.email.trim() ||
-      !memberForm.roleName.trim() ||
-      !isEnterpriseAdmin
-    ) {
-      return;
-    }
-    inviteMember(
-      {
-        ...memberForm,
-        enterpriseId: profile.enterpriseId,
-        companyName: profile.companyName,
-      },
-      profile.contactName,
-    );
-    setMemberForm({ name: '', email: '', phone: '', roleName: '', permissions: [] });
-  }
-
   useEffect(() => {
     if (
-      ((activeTab === 'members' || activeTab === 'approval') && !isEnterpriseAdmin) ||
+      ((activeTab === 'members' || activeTab === 'settings' || activeTab === 'approval') &&
+        !isEnterpriseAdmin) ||
       (activeTab === 'invoices' && !canManageInvoices)
     ) {
       setActiveTab('overview');
@@ -379,116 +316,24 @@ export function AccountPanel() {
 
   return (
     <div className="grid min-w-0 gap-4">
-      {!authHydrated && <section className="bg-bg-elevated min-h-[180px] rounded-lg p-4 md:p-5" />}
+      {!storesHydrated && (
+        <section className="bg-bg-elevated min-h-[180px] rounded-lg p-4 md:p-5" />
+      )}
 
-      {authHydrated && !isAuthenticated && (
-        <section className="bg-bg-elevated rounded-lg p-4 md:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-start gap-3">
-              <Building2 className="text-brand-500 mt-1 size-5 shrink-0" />
-              <div>
-                <h2 className="text-text-strong text-xl font-semibold">
-                  {t('accessRequestTitle')}
-                </h2>
-                <p className="text-text-muted mt-1.5 text-sm leading-relaxed md:text-base">
-                  {t('accessRequestHint')}
-                </p>
-              </div>
-            </div>
-            {latestAccessRequest && (
-              <Badge variant={latestAccessRequest.status === 'approved' ? 'in-stock' : 'standard'}>
-                {t(`accessRequestStatus.${latestAccessRequest.status}`)}
-              </Badge>
-            )}
-          </div>
-
-          <form className="mt-4 grid gap-3 md:gap-4" onSubmit={handleAccessRequestSubmit}>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label={t('companyName')}>
-                <Input
-                  value={accessForm.companyName}
-                  placeholder={t('accessCompanyPlaceholder')}
-                  onChange={(event) =>
-                    setAccessForm((current) => ({
-                      ...current,
-                      companyName: event.target.value,
-                    }))
-                  }
-                />
-              </Field>
-              <Field label={t('contactName')}>
-                <Input
-                  value={accessForm.contactName}
-                  placeholder={t('accessContactPlaceholder')}
-                  onChange={(event) =>
-                    setAccessForm((current) => ({
-                      ...current,
-                      contactName: event.target.value,
-                    }))
-                  }
-                />
-              </Field>
-              <Field label={t('phone')}>
-                <Input
-                  value={accessForm.phone}
-                  placeholder={t('accessPhonePlaceholder')}
-                  onChange={(event) =>
-                    setAccessForm((current) => ({
-                      ...current,
-                      phone: event.target.value,
-                    }))
-                  }
-                />
-              </Field>
-              <Field label={t('email')}>
-                <Input
-                  value={accessForm.email}
-                  placeholder={t('accessEmailPlaceholder')}
-                  onChange={(event) =>
-                    setAccessForm((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                />
-              </Field>
-            </div>
-            <div className="grid gap-3">
-              <Field label={t('accessIntent')}>
-                <textarea
-                  value={accessForm.intent}
-                  placeholder={t('accessIntentPlaceholder')}
-                  onChange={(event) =>
-                    setAccessForm((current) => ({
-                      ...current,
-                      intent: event.target.value,
-                    }))
-                  }
-                  className="border-divider bg-bg-control text-text-strong placeholder:text-text-muted focus:border-brand-500 min-h-[88px] w-full resize-y rounded-md border px-3 py-2 text-sm transition outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                />
-              </Field>
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="w-full sm:w-auto"
-                  disabled={!canSubmitAccessRequest}
-                >
-                  <Send className="size-4" />
-                  <span>{t('submitAccessRequest')}</span>
-                </Button>
-              </div>
-            </div>
-            {latestAccessRequest?.status === 'approved' && latestAccessRequest.enterpriseId && (
-              <p className="text-state-green-strong text-sm">
-                {t('accessApprovedHint', { enterpriseId: latestAccessRequest.enterpriseId })}
-              </p>
-            )}
-          </form>
+      {storesHydrated && !isAuthenticated && (
+        <section className="bg-bg-elevated rounded-lg px-5 py-12 text-center md:px-8 md:py-16">
+          <UserCog className="text-brand-500 mx-auto size-8" />
+          <h2 className="text-text-strong mt-4 text-xl font-semibold">{t('sessionTitle')}</h2>
+          <p className="text-text-muted mx-auto mt-2 max-w-xl text-sm leading-6">
+            {t('sessionHint')}
+          </p>
+          <Button asChild variant="primary" className="mt-5">
+            <Link href={`/${locale}/login`}>{t('signIn')}</Link>
+          </Button>
         </section>
       )}
 
-      {authHydrated && isAuthenticated && activePurchaseContext?.kind === 'personal' && (
+      {storesHydrated && isAuthenticated && activePurchaseContext?.kind === 'personal' && (
         <section className="grid gap-4">
           <div className="bg-bg-elevated overflow-hidden rounded-lg">
             <div className="bg-brand-soft flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between md:p-6">
@@ -565,7 +410,7 @@ export function AccountPanel() {
         </section>
       )}
 
-      {authHydrated && isAuthenticated && activePurchaseContext?.kind === 'organization' && (
+      {storesHydrated && isAuthenticated && activePurchaseContext?.kind === 'organization' && (
         <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
           <aside className="bg-bg-elevated rounded-lg p-2 lg:sticky lg:top-[124px]">
             <div className="border-divider mb-2 border-b px-2 py-3">
@@ -761,21 +606,9 @@ export function AccountPanel() {
               </div>
             )}
 
-            {isEnterpriseAdmin && activeTab === 'members' && (
-              <MemberManagementPanel
-                profile={profile}
-                members={enterpriseMembers}
-                memberForm={memberForm}
-                setMemberForm={setMemberForm}
-                updateProfile={updateProfile}
-                updateEnterpriseProfile={updateEnterpriseProfile}
-                updateMemberProfile={updateMemberProfile}
-                toggleMemberPermission={toggleMemberPermission}
-                deleteMember={deleteMember}
-                activateMember={activateMember}
-                onSubmit={handleMemberSubmit}
-              />
-            )}
+            {isEnterpriseAdmin && activeTab === 'members' && <OrganizationMembersPanel />}
+
+            {isEnterpriseAdmin && activeTab === 'settings' && <EnterpriseSettingsPanel />}
 
             {isEnterpriseAdmin && activeTab === 'approval' && (
               <ApprovalSettingsPanel
@@ -1179,7 +1012,8 @@ function PersonalMetric({
   );
 }
 
-function MemberManagementPanel({
+/** @deprecated Retained only for compatibility with older prototype imports. */
+export function LegacyMemberManagementPanel({
   profile,
   members,
   memberForm,

@@ -3,9 +3,14 @@ import type { Stock } from './product';
 
 export type AdminPermission = 'catalog' | 'orders' | 'invoices' | 'permissions';
 export type AdminPublishState = 'published' | 'draft';
-export type AdminMemberStatus = 'active' | 'invited';
-export type AdminAccessRequestStatus = 'pending' | 'approved' | 'rejected';
-export type AdminAuditModule = 'catalog' | 'orders' | 'quotes' | 'permissions' | 'access';
+export type AdminMemberStatus = 'active' | 'invited' | 'suspended';
+export type AdminAuditModule =
+  | 'catalog'
+  | 'orders'
+  | 'quotes'
+  | 'permissions'
+  | 'access'
+  | 'memberships';
 export type AdminAuditAction =
   | 'catalog-draft'
   | 'catalog-publish'
@@ -18,9 +23,12 @@ export type AdminAuditAction =
   | 'member-permission'
   | 'member-invite'
   | 'member-activate'
-  | 'access-request'
-  | 'access-approve'
-  | 'access-reject';
+  | 'member-suspend'
+  | 'member-restore'
+  | 'invitation-create'
+  | 'invitation-revoke'
+  | 'member-join'
+  | 'access-request';
 
 export interface AdminProductRecord {
   productId: string;
@@ -59,6 +67,31 @@ export interface AdminApprovalSettings {
   updatedAt: string;
 }
 
+export interface AdminOrganizationInvitation {
+  id: string;
+  token: string;
+  enterpriseId: string;
+  companyName: string;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
+  maxUses: number | null;
+  joinedUses: number;
+  roleName: string;
+  permissions: AdminPermission[];
+  revokedAt?: string;
+  revokedBy?: string;
+}
+
+export type AdminInvitationJoinResult =
+  | 'joined'
+  | 'invalid-link'
+  | 'expired'
+  | 'revoked'
+  | 'exhausted'
+  | 'already-member'
+  | 'invalid-phone';
+
 export interface AdminEnterpriseAccessRequest {
   id: string;
   companyName: string;
@@ -66,11 +99,8 @@ export interface AdminEnterpriseAccessRequest {
   phone: string;
   email: string;
   intent: string;
-  status: AdminAccessRequestStatus;
+  status: 'pending';
   requestedAt: string;
-  reviewedAt?: string;
-  reviewedBy?: string;
-  enterpriseId?: string;
 }
 
 export interface AdminAuditLog {

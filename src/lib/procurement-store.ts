@@ -234,6 +234,7 @@ interface ProcurementState {
   loginAccount: (emailOrName: string) => boolean;
   registerPersonalAccount: (input: RegisterPersonalInput) => RegistrationResult;
   switchPurchaseContext: (contextId: string) => boolean;
+  refreshPurchaseContexts: () => boolean;
   updateProfile: (patch: Partial<EnterpriseProfile>) => void;
   setRole: (role: EnterpriseRole) => void;
   updateCheckoutDraft: (patch: Partial<Omit<CheckoutDraft, 'approvalMode' | 'approver'>>) => void;
@@ -569,6 +570,14 @@ export const useProcurementStore = create<ProcurementState>()(
           return {
             isAuthenticated: true,
             account,
+            registeredAccounts: state.registeredAccounts.some((item) => item.id === account.id)
+              ? state.registeredAccounts.map((item) =>
+                  item.id === account.id ? { ...item, ...account } : item,
+                )
+              : [
+                  ...state.registeredAccounts,
+                  { ...account, registeredAt: new Date().toISOString() },
+                ],
             purchaseContexts: contexts,
             activePurchaseContextId: activeContext.contextId,
             activePurchaseContext: activeContext,
@@ -692,6 +701,35 @@ export const useProcurementStore = create<ProcurementState>()(
         const profile = profileForContext(state.account, activeContext);
         const checkoutDraft = draftForProfile(profile, checkoutDrafts);
         set({
+          activePurchaseContextId: activeContext.contextId,
+          activePurchaseContext: activeContext,
+          profile,
+          checkoutDraft,
+          checkoutDrafts: {
+            ...checkoutDrafts,
+            [profile.enterpriseId]: checkoutDraft,
+          },
+        });
+        return true;
+      },
+      refreshPurchaseContexts: () => {
+        const state = get();
+        if (!state.isAuthenticated || !state.account) return false;
+        const contexts = contextsForAccount(state.account, useAdminStore.getState().members);
+        const activeContext =
+          contexts.find((context) => context.contextId === state.activePurchaseContextId) ??
+          contexts.find((context) => context.kind === 'personal') ??
+          contexts[0];
+        if (!activeContext) return false;
+
+        const checkoutDrafts = {
+          ...state.checkoutDrafts,
+          [state.profile.enterpriseId]: state.checkoutDraft,
+        };
+        const profile = profileForContext(state.account, activeContext);
+        const checkoutDraft = draftForProfile(profile, checkoutDrafts);
+        set({
+          purchaseContexts: contexts,
           activePurchaseContextId: activeContext.contextId,
           activePurchaseContext: activeContext,
           profile,

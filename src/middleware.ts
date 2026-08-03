@@ -12,13 +12,13 @@ const storePathMap: Record<string, string> = {
   '/store/orders': '/zh/orders',
   '/store/account': '/zh/account',
   '/store/login': '/zh/login',
+  '/store/enterprise/apply': '/zh/enterprise/apply',
   '/store/try-os': '/zh/try-os',
   '/try-os': '/zh/try-os',
 };
 
 const storeRedirectMap: Record<string, string> = {
   '/store/cart': '/zh/checkout',
-  '/store/admin': '/zh/account',
 };
 
 export default function middleware(request: NextRequest) {
