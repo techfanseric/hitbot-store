@@ -28,6 +28,7 @@ import { formatPrice } from '@/lib/format';
 import { PartClassBadge } from './part-class-badge';
 import { ProductImage } from './product-image';
 import { ApprovalFlow, type ApprovalFlowStep } from './approval-flow';
+import { PaymentDialog } from './payment-dialog';
 import type { PaymentMethod } from '@/types/procurement';
 
 interface OsHandoff {
@@ -66,6 +67,10 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
   const authHydrated = useProcurementHydrated();
   const osHandoffImportedRef = useRef(false);
   const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
+  const [pendingPayment, setPendingPayment] = useState<{
+    orderNo: string;
+    amountCents: number;
+  } | null>(null);
   const {
     items,
     projectName,
@@ -553,6 +558,10 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
           ? t('orderSubmitSuccess')
           : t('approvalSubmitSuccess'),
     );
+    if (orderNo && !isQuoteOnlySubmission && (isAdminRole || isPersonalContext)) {
+      setPendingPayment({ orderNo, amountCents: subtotal });
+      return;
+    }
     navigateWithFallback(
       router,
       orderNo ? `/${locale}/orders/${encodeURIComponent(orderNo)}` : `/${locale}/orders`,
@@ -1265,6 +1274,18 @@ export function CheckoutSummary({ osHandoff }: CheckoutSummaryProps) {
           )}
         </div>
       </aside>
+      {pendingPayment && (
+        <PaymentDialog
+          orderNo={pendingPayment.orderNo}
+          amountCents={pendingPayment.amountCents}
+          onDone={() => setPendingPayment(null)}
+          onPaid={() => {
+            const { orderNo } = pendingPayment;
+            setPendingPayment(null);
+            navigateWithFallback(router, `/${locale}/orders/${encodeURIComponent(orderNo)}`);
+          }}
+        />
+      )}
     </div>
   );
 }
