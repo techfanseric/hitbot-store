@@ -13,10 +13,12 @@ import {
   GitBranch,
   ListFilter,
   LogOut,
+  PackageX,
   ReceiptText,
   Save,
   ShieldCheck,
   Trash2,
+  Truck,
   UserCog,
   UsersRound,
 } from 'lucide-react';
@@ -115,6 +117,7 @@ export function AccountPanel() {
     deleteInvoiceProfile,
     approveLocalOrder,
     markLocalOrderPaid,
+    reviewLocalShipment,
     advanceLocalOrder,
     acceptLocalQuote,
     acceptOsHandoff,
@@ -185,6 +188,8 @@ export function AccountPanel() {
     { key: 'pending-approval', label: t('orderStatus.pending-approval') },
     { key: 'pending-payment', label: t('orderStatus.pending-payment') },
     { key: 'paid', label: t('orderStatus.paid') },
+    { key: 'shipment-review', label: t('orderStatus.shipment-review') },
+    { key: 'awaiting-stock', label: t('orderStatus.awaiting-stock') },
     { key: 'in-production', label: t('orderStatus.in-production') },
     { key: 'shipped', label: t('orderStatus.shipped') },
     { key: 'completed', label: t('orderStatus.completed') },
@@ -846,9 +851,24 @@ export function AccountPanel() {
                                 'logistics',
                               )
                             }
+                            canReviewShipment={
+                              isAuthenticated &&
+                              ['paid', 'shipment-review', 'awaiting-stock'].includes(
+                                order.status,
+                              ) &&
+                              canHandleWorkflowRole(
+                                profile,
+                                enterpriseApprovalSettings,
+                                members,
+                                'logistics',
+                              )
+                            }
                             onApprove={() => approveLocalOrder(order.orderNo)}
                             onPay={() => markLocalOrderPaid(order.orderNo)}
                             onAdvance={() => advanceLocalOrder(order.orderNo)}
+                            onReviewShipment={(inStock) =>
+                              reviewLocalShipment(order.orderNo, inStock)
+                            }
                             detailHref={`/${locale}/orders/${encodeURIComponent(order.orderNo)}`}
                             labels={{
                               items: t('items'),
@@ -887,6 +907,11 @@ export function AccountPanel() {
                                   : order.status === 'in-production'
                                     ? t('shipOrder')
                                     : t('completeOrder'),
+                              shipWithStock: t('shipWithStock'),
+                              markOutOfStock: t('markOutOfStock'),
+                              restockAndShip: t('restockAndShip'),
+                              shipmentReviewHint: t('shipmentReviewHint'),
+                              awaitingStockHint: t('awaitingStockHint'),
                               locked:
                                 profile.role === 'engineer'
                                   ? t('engineerCannotProcess')
@@ -1925,9 +1950,11 @@ export function OrderRow({
   canApprove,
   canPay,
   canAdvance,
+  canReviewShipment,
   onApprove,
   onPay,
   onAdvance,
+  onReviewShipment,
   detailHref,
   showDetails = false,
   detailOnly = false,
@@ -1940,9 +1967,11 @@ export function OrderRow({
   canApprove: boolean;
   canPay: boolean;
   canAdvance: boolean;
+  canReviewShipment: boolean;
   onApprove: () => void;
   onPay: () => void;
   onAdvance: () => void;
+  onReviewShipment: (inStock: boolean) => void;
   detailHref?: string;
   showDetails?: boolean;
   detailOnly?: boolean;
@@ -1961,6 +1990,11 @@ export function OrderRow({
     approve: string;
     pay: string;
     advance: string;
+    shipWithStock: string;
+    markOutOfStock: string;
+    restockAndShip: string;
+    shipmentReviewHint: string;
+    awaitingStockHint: string;
     locked: string;
     downloadBom: string;
     downloadUnavailable: string;
@@ -2015,10 +2049,14 @@ export function OrderRow({
   const statusIcon =
     order.status === 'completed'
       ? FileCheck2
-      : ['pending-payment', 'paid', 'in-production', 'shipped'].includes(order.status)
+      : ['pending-payment', 'paid', 'shipment-review', 'in-production', 'shipped'].includes(
+            order.status,
+          )
         ? CircleDollarSign
         : Clock3;
   const StatusIcon = statusIcon;
+  const reviewableStatuses = ['paid', 'shipment-review', 'awaiting-stock'];
+  const showShipmentReview = canReviewShipment && reviewableStatuses.includes(order.status);
   const canDownloadBom = Boolean(order.lines?.length);
   const isOsOrder =
     Boolean(order.handoffId) || Boolean(order.lines?.some((line) => line.source === 'os'));
@@ -2052,7 +2090,39 @@ export function OrderRow({
           <span>{labels.advance}</span>
         </Button>
       )}
-      {!canApprove && !canPay && !canAdvance && showDetails && !detailOnly && (
+      {showShipmentReview && order.status === 'awaiting-stock' ? (
+        <Button
+          variant="primary"
+          size="sm"
+          className="h-[36px] px-3"
+          onClick={() => onReviewShipment(true)}
+        >
+          <Truck className="size-4" />
+          <span>{labels.restockAndShip}</span>
+        </Button>
+      ) : showShipmentReview ? (
+        <>
+          <Button
+            variant="primary"
+            size="sm"
+            className="h-[36px] px-3"
+            onClick={() => onReviewShipment(true)}
+          >
+            <Truck className="size-4" />
+            <span>{labels.shipWithStock}</span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-[36px] px-3"
+            onClick={() => onReviewShipment(false)}
+          >
+            <PackageX className="size-4" />
+            <span>{labels.markOutOfStock}</span>
+          </Button>
+        </>
+      ) : null}
+      {!canApprove && !canPay && !canAdvance && !showShipmentReview && showDetails && !detailOnly && (
         <span className="text-text-muted bg-bg-control text-md inline-flex h-[36px] items-center rounded-sm px-3">
           {labels.locked}
         </span>
@@ -2099,6 +2169,12 @@ export function OrderRow({
                 <span>{labels.submittedBy}</span>
                 <span>{orderSourceLabel}</span>
               </div>
+              {order.status === 'shipment-review' && (
+                <p className="text-text-muted mt-1.5 text-sm">{labels.shipmentReviewHint}</p>
+              )}
+              {order.status === 'awaiting-stock' && (
+                <p className="text-amber-600 mt-1.5 text-sm">{labels.awaitingStockHint}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_1fr_auto] xl:min-w-[400px]">
@@ -2133,6 +2209,12 @@ export function OrderRow({
           {detailOnly ? (
             <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
               <div className="flex flex-wrap items-center gap-1.5 md:gap-2">{actionControls}</div>
+              {order.status === 'shipment-review' && (
+                <p className="text-text-muted w-full text-sm">{labels.shipmentReviewHint}</p>
+              )}
+              {order.status === 'awaiting-stock' && (
+                <p className="w-full text-sm text-amber-600">{labels.awaitingStockHint}</p>
+              )}
             </div>
           ) : null}
           <ApprovalFlow
@@ -2462,6 +2544,8 @@ function orderApprovalFlowSteps(
     'pending-approval',
     'pending-payment',
     'paid',
+    'shipment-review',
+    'awaiting-stock',
     'in-production',
     'shipped',
     'completed',
@@ -2469,9 +2553,22 @@ function orderApprovalFlowSteps(
   const statusIndex = statusOrder.indexOf(order.status);
   const approvalRequired =
     order.approvalMode !== 'not-required' && order.approvalMode !== 'admin-direct';
-  const paymentDone = ['paid', 'in-production', 'shipped', 'completed'].includes(order.status);
+  const paymentDone = [
+    'paid',
+    'shipment-review',
+    'awaiting-stock',
+    'in-production',
+    'shipped',
+    'completed',
+  ].includes(order.status);
   const fulfillmentDone = order.status === 'completed';
-  const fulfillmentCurrent = ['paid', 'in-production', 'shipped'].includes(order.status);
+  const fulfillmentCurrent = [
+    'paid',
+    'shipment-review',
+    'awaiting-stock',
+    'in-production',
+    'shipped',
+  ].includes(order.status);
   const approvalMeta = order.approvedBy
     ? `${order.approvedBy} · ${formatDate(order.approvedAt ?? order.updatedAt ?? order.submittedAt, locale)}`
     : order.approver
@@ -2567,7 +2664,17 @@ export function statusVariant(
   status: LocalOrderSnapshot['status'],
 ): 'in-stock' | 'standard' | 'secondary' {
   if (status === 'completed') return 'in-stock';
-  if (['paid', 'in-production', 'shipped', 'pending-payment'].includes(status)) return 'standard';
+  if (
+    [
+      'paid',
+      'shipment-review',
+      'awaiting-stock',
+      'in-production',
+      'shipped',
+      'pending-payment',
+    ].includes(status)
+  )
+    return 'standard';
   return 'secondary';
 }
 

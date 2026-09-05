@@ -112,8 +112,10 @@ export function advanceOrderAction(order: LocalOrderSnapshot): LocalOrderSnapsho
   const nextStatusByAction: Partial<Record<OrderStatus, OrderStatus>> = {
     'pending-quote': 'pending-approval',
     'pending-approval': 'pending-payment',
-    'pending-payment': 'paid',
+    'pending-payment': 'shipment-review',
     paid: 'in-production',
+    'shipment-review': 'shipped',
+    'awaiting-stock': 'shipped',
     'in-production': 'shipped',
     shipped: 'completed',
   };
@@ -121,6 +123,9 @@ export function advanceOrderAction(order: LocalOrderSnapshot): LocalOrderSnapsho
   const patchByStatus: Partial<Record<OrderStatus, Partial<LocalOrderSnapshot>>> = {
     'pending-payment': {
       approvedAt: order.approvedAt ?? now,
+    },
+    'shipment-review': {
+      paidAt: order.paidAt ?? now,
     },
     'in-production': {
       productionStartedAt: order.productionStartedAt ?? now,

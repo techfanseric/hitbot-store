@@ -76,6 +76,7 @@ export function OrderCenter() {
     orders,
     approveLocalOrder,
     markLocalOrderPaid,
+    reviewLocalShipment,
     advanceLocalOrder,
   } = useProcurementStore();
   const isPersonalContext = activePurchaseContext?.kind === 'personal';
@@ -96,6 +97,8 @@ export function OrderCenter() {
     { key: 'pending-approval', label: tAccount('orderStatus.pending-approval') },
     { key: 'pending-payment', label: tAccount('orderStatus.pending-payment') },
     { key: 'paid', label: tAccount('orderStatus.paid') },
+    { key: 'shipment-review', label: tAccount('orderStatus.shipment-review') },
+    { key: 'awaiting-stock', label: tAccount('orderStatus.awaiting-stock') },
     { key: 'in-production', label: tAccount('orderStatus.in-production') },
     { key: 'shipped', label: tAccount('orderStatus.shipped') },
     { key: 'completed', label: tAccount('orderStatus.completed') },
@@ -175,7 +178,9 @@ export function OrderCenter() {
     ['pending-quote', 'pending-approval', 'pending-payment'].includes(order.status),
   ).length;
   const activeCount = enterpriseOrders.filter((order) =>
-    ['paid', 'in-production', 'shipped'].includes(order.status),
+    ['paid', 'shipment-review', 'awaiting-stock', 'in-production', 'shipped'].includes(
+      order.status,
+    ),
   ).length;
   const completedCount = enterpriseOrders.filter((order) => order.status === 'completed').length;
   const totalCents = enterpriseOrders.reduce((sum, order) => sum + order.subtotalCents, 0);
@@ -464,9 +469,21 @@ export function OrderCenter() {
                           'logistics',
                         ))
                     }
+                    canReviewShipment={
+                      isAuthenticated &&
+                      ['paid', 'shipment-review', 'awaiting-stock'].includes(order.status) &&
+                      (isPersonalContext ||
+                        canHandleWorkflowRole(
+                          profile,
+                          enterpriseApprovalSettings,
+                          adminMembers,
+                          'logistics',
+                        ))
+                    }
                     onApprove={() => approveLocalOrder(order.orderNo)}
                     onPay={() => markLocalOrderPaid(order.orderNo)}
                     onAdvance={() => advanceLocalOrder(order.orderNo)}
+                    onReviewShipment={(inStock) => reviewLocalShipment(order.orderNo, inStock)}
                     detailHref={`/${locale}/orders/${encodeURIComponent(order.orderNo)}`}
                     labels={{
                       items: tAccount('items'),
@@ -505,6 +522,11 @@ export function OrderCenter() {
                           : order.status === 'in-production'
                             ? tAccount('shipOrder')
                             : tAccount('completeOrder'),
+                      shipWithStock: tAccount('shipWithStock'),
+                      markOutOfStock: tAccount('markOutOfStock'),
+                      restockAndShip: tAccount('restockAndShip'),
+                      shipmentReviewHint: tAccount('shipmentReviewHint'),
+                      awaitingStockHint: tAccount('awaitingStockHint'),
                       locked:
                         profile.role === 'engineer'
                           ? tAccount('engineerCannotProcess')

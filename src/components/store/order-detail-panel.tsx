@@ -49,6 +49,7 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
     orders,
     approveLocalOrder,
     markLocalOrderPaid,
+    reviewLocalShipment,
     advanceLocalOrder,
   } = useProcurementStore();
   const isPersonalContext = activePurchaseContext?.kind === 'personal';
@@ -208,9 +209,16 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
           (isPersonalContext ||
             canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'logistics'))
         }
+        canReviewShipment={
+          isAuthenticated &&
+          ['paid', 'shipment-review', 'awaiting-stock'].includes(order.status) &&
+          (isPersonalContext ||
+            canHandleWorkflowRole(profile, enterpriseApprovalSettings, adminMembers, 'logistics'))
+        }
         onApprove={() => approveLocalOrder(order.orderNo)}
         onPay={() => markLocalOrderPaid(order.orderNo)}
         onAdvance={() => advanceLocalOrder(order.orderNo)}
+        onReviewShipment={(inStock) => reviewLocalShipment(order.orderNo, inStock)}
         showDetails
         detailOnly
         labels={{
@@ -250,6 +258,11 @@ export function OrderDetailPanel({ orderNo }: OrderDetailPanelProps) {
               : order.status === 'in-production'
                 ? tAccount('shipOrder')
                 : tAccount('completeOrder'),
+          shipWithStock: tAccount('shipWithStock'),
+          markOutOfStock: tAccount('markOutOfStock'),
+          restockAndShip: tAccount('restockAndShip'),
+          shipmentReviewHint: tAccount('shipmentReviewHint'),
+          awaitingStockHint: tAccount('awaitingStockHint'),
           locked:
             profile.role === 'engineer'
               ? tAccount('engineerCannotProcess')

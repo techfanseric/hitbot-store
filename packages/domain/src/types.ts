@@ -114,6 +114,8 @@ export type OrderStatus =
   | 'pending-approval'
   | 'pending-payment'
   | 'paid'
+  | 'shipment-review'
+  | 'awaiting-stock'
   | 'in-production'
   | 'shipped'
   | 'completed';

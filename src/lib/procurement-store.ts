@@ -250,6 +250,7 @@ interface ProcurementState {
   acceptLocalQuote: (requestNo: string) => void;
   approveLocalOrder: (orderNo: string) => void;
   markLocalOrderPaid: (orderNo: string) => void;
+  reviewLocalShipment: (orderNo: string, inStock: boolean) => void;
   advanceLocalOrder: (orderNo: string) => void;
   resetCheckoutDraft: () => void;
 }
@@ -1247,7 +1248,7 @@ export const useProcurementStore = create<ProcurementState>()(
             isSameEnterprise(profile, order)
               ? {
                   ...order,
-                  status: 'paid',
+                  status: 'shipment-review',
                   paidAt: updatedAt,
                   paidBy: profile.contactName,
                   paymentReference: nextPaymentReference(order.orderNo, order.paymentMethod),
@@ -1255,6 +1256,41 @@ export const useProcurementStore = create<ProcurementState>()(
                 }
               : order,
           ),
+        }));
+      },
+      reviewLocalShipment: (orderNo, inStock) => {
+        const { isAuthenticated, profile } = get();
+        if (!isAuthenticated || profile.role === 'engineer') return;
+
+        const updatedAt = new Date().toISOString();
+        set((state) => ({
+          orders: state.orders.map((order) => {
+            if (order.orderNo !== orderNo) return order;
+            if (!isSameEnterprise(profile, order)) return order;
+
+            if (
+              (order.status === 'shipment-review' || order.status === 'paid') &&
+              !inStock
+            ) {
+              return { ...order, status: 'awaiting-stock', updatedAt };
+            }
+
+            if (
+              ((order.status === 'shipment-review' || order.status === 'paid') && inStock) ||
+              order.status === 'awaiting-stock'
+            ) {
+              return {
+                ...order,
+                status: 'shipped',
+                shippedAt: updatedAt,
+                carrier: order.carrier ?? 'SF Express',
+                trackingNo: order.trackingNo ?? nextTrackingNo(order.orderNo),
+                updatedAt,
+              };
+            }
+
+            return order;
+          }),
         }));
       },
       advanceLocalOrder: (orderNo) => {

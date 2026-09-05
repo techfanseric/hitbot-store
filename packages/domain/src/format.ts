@@ -35,6 +35,8 @@ export function orderStatusLabel(status: OrderStatus) {
     'pending-approval': '待审批',
     'pending-payment': '待付款',
     paid: '已付款',
+    'shipment-review': '发货审核中',
+    'awaiting-stock': '待发货',
     'in-production': '生产中',
     shipped: '待收货',
     completed: '已完成',
