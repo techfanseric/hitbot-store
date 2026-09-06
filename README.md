@@ -6,6 +6,19 @@
 
 ---
 
+## Unreleased — 容器宽度规范与宽屏档
+
+提交：`5e64368` · 2026-09-06
+
+把商城内页散乱硬编码的 `max-w-[xxx]` 统一到一个共享组件，并加一档宽屏档：
+
+- 新增 `<StoreContainer>` 组件（`src/components/store/store-container.tsx`），所有内页主内容宽度都走它，宽度来源规范文档（`docs/design/header-footer-spec.md:181` + `docs/design/store-design-system.html:265`）。
+- 两档宽度：`wide=false` 默认 `max-w-7xl`（1280px），`wide=true` 升到 `max-w-[1600px]`（1600px），适配宽屏显示器。
+- 之前 7 个内页（订单/订单详情/企业账号/企业申请/结算/商品列表/商品详情）和 `trial-experience` 各自硬编码 1080/1200/1280/1400/1500/1600，现在全部统一引用 `<StoreContainer>`，商品页与试用页用 `wide`。
+- 配套在「关键约定」加了一节「内页容器宽度」（见下文）。
+
+---
+
 ## v0.3.0 — 企业邀请制与成员权限治理
 
 发布日期：2026-08-03
@@ -191,6 +204,37 @@ const { items, count, hydrated, add, remove, setQty, clear } = useCartSafe();
 - `syncStatus`：本地暂存、待同步或已同步
 
 M0 使用 `hitbot-cart-v2` localStorage；后续接后端时应保留这套语义字段，而不是退回普通商品篮子模型。
+
+### 7. 内页容器宽度
+
+所有商城内页主内容**必须**用 `<StoreContainer>`，不要自己再写 `mx-auto w-[90%] max-w-[xxx]`。
+
+```tsx
+import { StoreContainer } from '@/components/store/store-container';
+
+// 默认：max-w-7xl = 1280px
+<StoreContainer className="py-6 md:py-10">…</StoreContainer>
+
+// 宽屏档：max-w-[1600px] = 1600px
+<StoreContainer wide className="py-5 md:py-8">…</StoreContainer>
+```
+
+两档宽度：
+
+| `wide` | Tailwind 类 | 像素 | 适用场景 |
+| --- | --- | --- | --- |
+| `false`（默认） | `max-w-7xl` | 1280 | 订单、订单详情、企业账号、企业申请、结算 |
+| `true` | `max-w-[1600px]` | 1600 | 商品列表、商品详情、`trial-experience` |
+
+**已知的合理例外**（不要替换成 `StoreContainer`）：
+
+- `src/app/[locale]/login/page.tsx` `max-w-[960px]`：登录页是居中卡片，1280 全宽会显得空。
+- `src/app/[locale]/join/[token]/page.tsx` `max-w-[600px]`：邀请页是更窄的居中卡片。
+- `src/app/[locale]/design-system/page.tsx` `max-w-[1600px]`：设计系统展示页。
+- `src/components/store/site-footer.tsx` `max-w-[1600px]`：footer 容器，footer 自己的 1600 规范（见 `header-footer-spec.md:181`）。
+- `src/components/store/trial-experience.tsx` 用 `w-[94%]` 不是 `w-[90%]`：trial 是独立体验线，视觉密度比内页稍宽。
+
+将来需要再加一档（如控制台/报表的 1840）时，只在 `StoreContainer` 里加一个新的 prop，**不要** 在新页面里硬编码新的 `max-w-[xxx]`。
 
 ---
 
