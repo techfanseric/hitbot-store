@@ -9,6 +9,7 @@ import { StockBadge } from '@/components/store/stock-badge';
 import { AddToCartButton } from '@/components/store/add-to-cart-button';
 import { ProductGrid } from '@/components/store/product-grid';
 import { ProductImage } from '@/components/store/product-image';
+import { StoreContainer } from '@/components/store/store-container';
 import { formatPrice } from '@/lib/format';
 import { absoluteStoreUrl, localizedProductPath, publicProductPath } from '@/lib/store-paths';
 import type { AppLocale } from '@/i18n/routing';
@@ -82,7 +83,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   return (
     <div className="bg-bg-app">
       <ProductStructuredData product={product} locale={locale as AppLocale} />
-      <div className="mx-auto w-[90%] max-w-[1600px] py-6 md:py-[48px]">
+      <StoreContainer wide className="py-6 md:py-12">
         <nav
           className="mb-4 flex flex-wrap items-center gap-[8px] text-sm md:mb-[32px] md:text-lg"
           aria-label={t('breadcrumb')}
@@ -195,7 +196,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <ProductGrid products={related} variant="compact" />
           </section>
         )}
-      </div>
+      </StoreContainer>
     </div>
   );
 }

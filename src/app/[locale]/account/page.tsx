@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { AccountPanel } from '@/components/store/account-panel';
+import { StoreContainer } from '@/components/store/store-container';
 
 export const metadata: Metadata = {
   title: '企业账号',
@@ -25,7 +26,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
 
   return (
     <div className="bg-bg-app">
-      <div className="mx-auto w-[90%] max-w-[1200px] py-6 md:py-[40px]">
+      <StoreContainer wide className="py-6 md:py-10">
         <div className="mb-5 max-w-3xl md:mb-[24px]">
           <p className="text-text-muted text-sm font-medium">HITBOT Store</p>
           <h1 className="text-text-strong mt-1.5 text-2xl font-semibold md:mt-[8px] md:text-4xl">
@@ -36,7 +37,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
           </p>
         </div>
         <AccountPanel />
-      </div>
+      </StoreContainer>
     </div>
   );
 }

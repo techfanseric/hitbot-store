@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { CategoryFilter } from '@/components/store/category-filter';
 import { ProductBannerCarousel } from '@/components/store/product-banner-carousel';
 import { ProductGrid } from '@/components/store/product-grid';
+import { StoreContainer } from '@/components/store/store-container';
 import { products } from '@/mock-data';
 import { localizedProductsPath, PUBLIC_PRODUCTS_PATH } from '@/lib/store-paths';
 import type { AppLocale } from '@/i18n/routing';
@@ -105,7 +106,7 @@ export default async function ProductsPage({ params, searchParams }: ProductsPag
 
   return (
     <div className="bg-bg-app">
-      <div className="mx-auto w-[90%] max-w-[1600px] py-[20px] md:py-[32px]">
+      <StoreContainer wide className="py-5 md:py-8">
         <ProductBannerCarousel />
         <div className="mb-4 flex flex-col gap-1.5 md:mb-5 md:flex-row md:items-end md:justify-between md:gap-[16px]">
           <div>
@@ -133,7 +134,7 @@ export default async function ProductsPage({ params, searchParams }: ProductsPag
             )}
           </div>
         </div>
-      </div>
+      </StoreContainer>
     </div>
   );
 }

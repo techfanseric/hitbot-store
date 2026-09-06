@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Building2, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { EnterpriseApplicationPanel } from '@/components/store/enterprise-application-panel';
+import { StoreContainer } from '@/components/store/store-container';
 
 export const metadata: Metadata = {
   title: '申请开通企业账号',
@@ -21,7 +22,7 @@ export default async function EnterpriseApplyPage({ params }: EnterpriseApplyPag
 
   return (
     <main className="bg-bg-app">
-      <div className="mx-auto grid w-[90%] max-w-[1080px] gap-7 py-8 lg:grid-cols-[300px_minmax(0,1fr)] lg:py-12">
+      <StoreContainer wide className="grid gap-7 py-8 lg:grid-cols-[300px_minmax(0,1fr)] lg:py-12">
         <aside className="lg:pt-3">
           <p className="text-brand-500 text-sm font-semibold">HITBOT Store</p>
           <h1 className="text-text-strong mt-2 text-3xl font-semibold md:text-4xl">
@@ -55,7 +56,7 @@ export default async function EnterpriseApplyPage({ params }: EnterpriseApplyPag
           </Link>
         </aside>
         <EnterpriseApplicationPanel />
-      </div>
+      </StoreContainer>
     </main>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { CheckoutSummary } from '@/components/store/checkout-summary';
+import { StoreContainer } from '@/components/store/store-container';
 
 export const metadata: Metadata = {
   title: '确认购物车',
@@ -51,7 +52,7 @@ export default async function CheckoutPage({ params, searchParams }: CheckoutPag
 
   return (
     <div className="bg-bg-app">
-      <div className="mx-auto w-[90%] max-w-[1400px] py-[20px] md:py-[32px]">
+      <StoreContainer wide className="py-5 md:py-8">
         <div className="mb-[20px] max-w-3xl">
           <p className="text-text-muted text-sm font-medium">HITBOT Store</p>
           <h1 className="text-text-strong mt-1.5 text-2xl font-semibold md:mt-2 md:text-4xl">
@@ -62,7 +63,7 @@ export default async function CheckoutPage({ params, searchParams }: CheckoutPag
           </p>
         </div>
         <CheckoutSummary osHandoff={osHandoff} />
-      </div>
+      </StoreContainer>
     </div>
   );
 }

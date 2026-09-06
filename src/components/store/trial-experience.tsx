@@ -40,7 +40,7 @@ export function TrialExperience() {
 
   if (!session) {
     return (
-      <div className="mx-auto grid w-[94%] max-w-[1280px] gap-5 py-[20px] md:py-[28px] lg:grid-cols-[minmax(0,0.85fr)_minmax(380px,1fr)] lg:items-start">
+      <div className="mx-auto grid w-[94%] max-w-[1600px] gap-5 py-[20px] md:py-[28px] lg:grid-cols-[minmax(0,0.85fr)_minmax(380px,1fr)] lg:items-start">
         <section>
           <p className="text-brand-500 text-sm font-semibold tracking-[0.08em]">HITBOTOS</p>
           <h1 className="text-text-strong mt-2 text-3xl font-semibold md:text-4xl">{t('title')}</h1>
@@ -102,7 +102,7 @@ export function TrialExperience() {
   }
 
   return (
-    <div className="mx-auto w-[94%] max-w-[1500px] py-4 md:py-5">
+    <div className="mx-auto w-[94%] max-w-[1600px] py-4 md:py-5">
       <div className="bg-bg-elevated mb-4 flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-3">
         <div>
           <p className="text-text-strong text-lg font-semibold">{session.projectName}</p>
