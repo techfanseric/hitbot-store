@@ -175,6 +175,16 @@
     "customPart": "Custom Part",
     "referencePart": "Reference Part"
   },
+  "ProductResources": {
+    "title": "Product resources",
+    "view": "View",
+    "download": "Download",
+    "viewLabel": "View {name} (new window)",
+    "downloadLabel": "Download {name}",
+    "chinese": "简体中文",
+    "english": "English",
+    "sample": "Sample"
+  },
   "Cart": {
     "title": "Cart",
     "empty": "Your cart is empty",

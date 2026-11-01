@@ -1,0 +1,57 @@
+.detail-page .product-resources {
+  margin-bottom: 10px;
+  padding: 14px;
+
+  .section-title {
+    margin-bottom: 4px;
+  }
+
+  .resource-row {
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+  }
+
+  .resource-info {
+    min-width: 0;
+  }
+
+  .resource-name {
+    display: block;
+    color: #1a1a1a;
+    font-size: 14px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .resource-meta {
+    display: block;
+    margin-top: 4px;
+    color: #777777;
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .resource-action {
+    flex-shrink: 0;
+    min-width: 64px;
+    min-height: 40px;
+    padding: 0 8px;
+    border-radius: 4px;
+    background: #f6f6f7;
+    color: #555555;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .resource-error {
+    display: block;
+    margin-top: 4px;
+    color: #bd1c22;
+    font-size: 12px;
+  }
+}

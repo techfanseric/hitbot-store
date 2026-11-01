@@ -6,6 +6,42 @@
 
 ---
 
+## 产品资料下载 — Web 与微信小程序
+
+更新日期：2026-11-02
+
+本次更新为商城网页端和微信小程序增加产品资料入口，用户可在商品详情中获取产品手册与三维模型文件：
+
+- 商品参数下方新增「产品资料」区，手册和模型各占一行，保持紧凑布局。
+- 资料公开获取，无需登录；只显示已配置的文件，没有资料时隐藏整个区域。
+- Web 端支持 PDF 手册查看与下载、STP 模型下载，适配桌面、手机、中英文与深色主题。
+- 微信小程序提供手册查看入口，模型支持复制商品资料页链接，方便在电脑端下载。
+- 两端共用商品资料配置，展示文件格式、大小及语言等信息，点击后才获取文件。
+
+以下按同一商品、相同页面宽度展示更新前后对比，左侧为 Before，右侧为 After。表格使用等宽缩略图，点击可查看原图。
+
+### Web 桌面版
+
+| Before | After |
+| --- | --- |
+| [![Web 桌面版 Before](./docs/verification/screenshots/product-resources-2026-11-01/thumbnails/web-before.png)](./docs/verification/screenshots/product-resources-2026-11-01/web-before.png) | [![Web 桌面版 After](./docs/verification/screenshots/product-resources-2026-11-01/thumbnails/web-after.png)](./docs/verification/screenshots/product-resources-2026-11-01/web-after.png) |
+
+### Web 手机版
+
+| Before | After |
+| --- | --- |
+| [![Web 手机版 Before](./docs/verification/screenshots/product-resources-2026-11-01/thumbnails/web-mobile-before.png)](./docs/verification/screenshots/product-resources-2026-11-01/web-mobile-before.png) | [![Web 手机版 After](./docs/verification/screenshots/product-resources-2026-11-01/thumbnails/web-mobile-after.png)](./docs/verification/screenshots/product-resources-2026-11-01/web-mobile-after.png) |
+
+### 微信小程序
+
+| Before | After |
+| --- | --- |
+| [![微信小程序 Before](./docs/verification/screenshots/product-resources-2026-11-01/thumbnails/mini-before.png)](./docs/verification/screenshots/product-resources-2026-11-01/mini-before.png) | [![微信小程序 After](./docs/verification/screenshots/product-resources-2026-11-01/thumbnails/mini-after.png)](./docs/verification/screenshots/product-resources-2026-11-01/mini-after.png) |
+
+[Web 桌面局部截图](./docs/verification/screenshots/product-resources-2026-11-01/web-after-detail.png) · [PDF 手册查看](./docs/verification/screenshots/product-resources-2026-11-01/web-pdf-preview.png) · [验证记录](./docs/verification/PRODUCT-RESOURCES-2026-11-01.md) · [资料接口约定](./docs/product/mini-program-api-contract.md#商品资料2026-11-01)
+
+---
+
 ## Unreleased — 容器宽度规范与宽屏档
 
 提交：`5e64368` · 2026-09-06

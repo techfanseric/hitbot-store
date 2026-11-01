@@ -1,0 +1,17 @@
+$ pnpm --filter @hitbot/domain build && pnpm --filter @hitbot/api-client build && pnpm --filter @hitbot/domain typecheck && pnpm --filter @hitbot/api-client typecheck && pnpm --filter @hitbot/wechat-miniprogram typecheck
+$ tsc
+$ tsc
+$ tsc --noEmit
+$ tsc --noEmit
+$ tsc --noEmit
+src/pages/order-detail/index.tsx(117,32): error TS18048: 'currentStep' is possibly 'undefined'.
+src/pages/order-detail/index.tsx(153,41): error TS18048: 'currentStep' is possibly 'undefined'.
+src/pages/order-detail/index.tsx(239,10): error TS2339: Property 'awaiting-stock' does not exist on type '{ 'pending-quote': number; 'pending-approval': number; 'pending-payment': number; paid: number; 'in-production': number; shipped: number; completed: number; }'.
+src/pages/order-detail/index.tsx(239,10): error TS2339: Property 'shipment-review' does not exist on type '{ 'pending-quote': number; 'pending-approval': number; 'pending-payment': number; paid: number; 'in-production': number; shipped: number; completed: number; }'.
+[ELIFECYCLE] Command failed with exit code 2.
+Error: ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL
+
+  × "pnpm recursive run" failed in /Users/ericyim/hitbot-store/apps/wechat-
+  │ miniprogram
+
+[ELIFECYCLE] Command failed with exit code 1.

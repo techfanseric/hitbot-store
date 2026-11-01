@@ -2,12 +2,7 @@
 import { useEffect, useMemo } from 'react';
 import Taro, { useRouter } from '@tarojs/taro';
 import { Button, Image, Text, View } from '@tarojs/components';
-import {
-  formatPrice,
-  localized,
-  partClassLabel,
-  stockLabel,
-} from '@hitbot/domain';
+import { formatPrice, localized, partClassLabel, stockLabel } from '@hitbot/domain';
 import {
   addProductToActiveCart,
   findProduct,
@@ -20,6 +15,7 @@ import {
 } from '@/services/store';
 import { useMiniStore } from '@/hooks/use-mini-store';
 import { CartQuantityStepper } from '@/components/cart-quantity-stepper';
+import { ProductResources } from '@/components/product-resources';
 import './index.scss';
 
 export default function ProductDetailPage() {
@@ -29,8 +25,13 @@ export default function ProductDetailPage() {
   const product = findProduct(slug);
   const isQuote = product ? product.priceCents === 0 || product.partClass === 'custom' : false;
   const isOutOfStock = product?.stock === 'out-of-stock';
-  const category = product ? appState.categories.find((item) => item.id === product.category) : null;
-  const related = useMemo(() => (product ? relatedProducts(product.id).slice(0, 3) : []), [product]);
+  const category = product
+    ? appState.categories.find((item) => item.id === product.category)
+    : null;
+  const related = useMemo(
+    () => (product ? relatedProducts(product.id).slice(0, 3) : []),
+    [product],
+  );
   const enterpriseBound = isEnterpriseBound(appState);
   const cartQuantity = product ? getMiniCartProductQuantity(product.id, appState, 'web') : 0;
 
@@ -103,21 +104,29 @@ export default function ProductDetailPage() {
         <Text className="price">{formatPrice(product.priceCents, product.currency)}</Text>
         <View className="tag-row">
           {category && <Text className="tag">{localized(category.name)}</Text>}
-          <Text className={isQuote ? 'tag tag-yellow' : 'tag tag-red'}>{partClassLabel(product.partClass)}</Text>
-          <Text className={product.stock === 'in-stock' ? 'tag tag-green' : 'tag'}>{stockLabel(product.stock)}</Text>
+          <Text className={isQuote ? 'tag tag-yellow' : 'tag tag-red'}>
+            {partClassLabel(product.partClass)}
+          </Text>
+          <Text className={product.stock === 'in-stock' ? 'tag tag-green' : 'tag'}>
+            {stockLabel(product.stock)}
+          </Text>
         </View>
         <Text className="description">{localized(product.description)}</Text>
       </View>
 
-      <View className="surface specs">
-        <Text className="section-title">关键参数</Text>
-        {product.specs.map((spec) => (
-          <View key={`${spec.key.zh}-${spec.value}`} className="spec-row">
-            <Text className="spec-key">{localized(spec.key)}</Text>
-            <Text className="spec-value">{spec.value}</Text>
-          </View>
-        ))}
-      </View>
+      {product.specs.length > 0 && (
+        <View className="surface specs">
+          <Text className="section-title">关键参数</Text>
+          {product.specs.map((spec) => (
+            <View key={`${spec.key.zh}-${spec.value}`} className="spec-row">
+              <Text className="spec-key">{localized(spec.key)}</Text>
+              <Text className="spec-value">{spec.value}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <ProductResources resources={product.resources} slug={product.slug} />
 
       {related.length > 0 && (
         <View className="surface related">
@@ -126,7 +135,9 @@ export default function ProductDetailPage() {
             <View
               key={item.id}
               className="related-row"
-              onClick={() => Taro.redirectTo({ url: `/pages/product-detail/index?slug=${item.slug}` })}
+              onClick={() =>
+                Taro.redirectTo({ url: `/pages/product-detail/index?slug=${item.slug}` })
+              }
             >
               <View>
                 <Text className="related-model">{item.model}</Text>
@@ -141,18 +152,18 @@ export default function ProductDetailPage() {
       <View className="bottom-bar">
         <View>
           <Text className={cartQuantity > 0 ? 'hint in-cart' : 'hint'}>
-            {cartQuantity > 0 ? `购物车已有 ${cartQuantity} 件` : isQuote ? '提交后由销售报价' : '可加入购物车'}
+            {cartQuantity > 0
+              ? `购物车已有 ${cartQuantity} 件`
+              : isQuote
+                ? '提交后由销售报价'
+                : '可加入购物车'}
           </Text>
           <Text className="amount">{formatPrice(product.priceCents, product.currency)}</Text>
         </View>
         {cartQuantity > 0 ? (
           <CartQuantityStepper value={cartQuantity} onChange={updateProductQuantity} />
         ) : (
-          <Button
-            className="primary-button"
-            disabled={isOutOfStock}
-            onClick={handleAddToCart}
-          >
+          <Button className="primary-button" disabled={isOutOfStock} onClick={handleAddToCart}>
             {isOutOfStock ? '暂不可购' : isQuote ? '提交询价' : '加入购物车'}
           </Button>
         )}

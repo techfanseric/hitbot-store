@@ -6,3 +6,4 @@ export * from './orders';
 export * from './profiles';
 export * from './procurement';
 export * from './format';
+export * from './resources';

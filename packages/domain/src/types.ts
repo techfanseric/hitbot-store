@@ -31,6 +31,22 @@ export interface ProductSelection {
   dof?: number;
 }
 
+export interface ProductResource {
+  id: string;
+  kind: 'manual' | 'model';
+  name: LocalizedString;
+  format: 'pdf' | 'stp' | 'step' | 'zip';
+  fileName: string;
+  sizeBytes: number;
+  /** Public file URL, or a path relative to the storefront origin. */
+  url: string;
+  /** For external storage, serve this URL with Content-Disposition: attachment. */
+  downloadUrl?: string;
+  language?: Locale;
+  version?: string;
+  isSample?: boolean;
+}
+
 export interface Product {
   id: string;
   slug: string;
@@ -45,6 +61,7 @@ export interface Product {
   image?: string;
   images: string[];
   specs: ProductSpec[];
+  resources?: ProductResource[];
   selection?: ProductSelection;
   accessoryProductIds?: string[];
   description: LocalizedString;

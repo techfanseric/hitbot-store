@@ -9,6 +9,7 @@ import { StockBadge } from '@/components/store/stock-badge';
 import { AddToCartButton } from '@/components/store/add-to-cart-button';
 import { ProductGrid } from '@/components/store/product-grid';
 import { ProductImage } from '@/components/store/product-image';
+import { ProductResources } from '@/components/store/product-resources';
 import { StoreContainer } from '@/components/store/store-container';
 import { formatPrice } from '@/lib/format';
 import { absoluteStoreUrl, localizedProductPath, publicProductPath } from '@/lib/store-paths';
@@ -161,22 +162,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
         </div>
 
-        <section className="mt-8 md:mt-[48px]">
-          <h2 className="mb-[16px] text-2xl font-semibold md:mb-[20px]">{t('specs')}</h2>
-          <dl className="bg-divider grid grid-cols-1 gap-px overflow-hidden rounded-lg text-base sm:grid-cols-2 lg:grid-cols-3 md:text-lg">
-            {product.specs.map((spec, idx) => (
-              <div
-                key={idx}
-                className="bg-bg-elevated grid min-h-[52px] grid-cols-[minmax(96px,0.42fr)_minmax(0,1fr)] items-center md:min-h-[56px]"
-              >
-                <dt className="text-text-muted min-w-0 px-[12px] py-[10px]">
-                  {spec.key[locale as 'zh' | 'en']}
-                </dt>
-                <dd className="text-text-strong min-w-0 px-[12px] py-[10px]">{spec.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+        {product.specs.length > 0 && (
+          <section className="mt-8 md:mt-[48px]">
+            <h2 className="mb-[16px] text-2xl font-semibold md:mb-[20px]">{t('specs')}</h2>
+            <dl className="bg-divider grid grid-cols-1 gap-px overflow-hidden rounded-lg text-base sm:grid-cols-2 md:text-lg lg:grid-cols-3">
+              {product.specs.map((spec, idx) => (
+                <div
+                  key={idx}
+                  className="bg-bg-elevated grid min-h-[52px] grid-cols-[minmax(96px,0.42fr)_minmax(0,1fr)] items-center md:min-h-[56px]"
+                >
+                  <dt className="text-text-muted min-w-0 px-[12px] py-[10px]">
+                    {spec.key[locale as 'zh' | 'en']}
+                  </dt>
+                  <dd className="text-text-strong min-w-0 px-[12px] py-[10px]">{spec.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
+
+        <ProductResources resources={product.resources} locale={appLocale} />
 
         {accessories.length > 0 && (
           <section className="mt-8 md:mt-[48px]">

@@ -1,0 +1,9 @@
+{
+  "downloads": [
+    {
+      "url": "http://127.0.0.1:3107/resources/examples/hitbot-resource-sample.pdf",
+      "error": "downloadFile:fail createDownloadTask:fail url not in domain list"
+    }
+  ],
+  "documents": []
+}

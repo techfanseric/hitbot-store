@@ -94,6 +94,39 @@ Response:
 
 返回商品详情，字段与 `Product` 一致。
 
+### 商品资料（2026-11-01）
+
+`Product.resources?: ProductResource[]` 为公开资料，不依赖登录、企业绑定或加购权限。缺省或空数组时，两端不显示资料区。示例：
+
+```json
+{
+  "resources": [
+    {
+      "id": "manual-zh-v1",
+      "kind": "manual",
+      "name": { "zh": "产品手册", "en": "Product manual" },
+      "format": "pdf",
+      "fileName": "product-manual-zh-v1.pdf",
+      "sizeBytes": 9017754,
+      "url": "https://files.example.com/product-manual-zh-v1.pdf",
+      "downloadUrl": "https://files.example.com/product-manual-zh-v1.pdf?download=1",
+      "language": "zh",
+      "version": "V1.0"
+    }
+  ]
+}
+```
+
+- `kind`：`manual` / `model`；`format`：`pdf` / `stp` / `step` / `zip`。大小为真实文件字节数。
+- `url` 用于查看原文件，`downloadUrl` 可选，用于浏览器下载；外部存储的下载响应应设置 `Content-Disposition: attachment`，PDF 查看响应使用正确的 PDF 类型并允许内联显示。
+- `language` 和 `version` 可选。文件语言与界面语言独立，不能因页面为英文而将中文手册标为英文。
+- `isSample: true` 仅用于当前原型中的示例资料；正式上线替换文件时移除此标记并更新实际大小。
+- 商品页只展示元数据，禁止自动下载或预加载附件。文件由存储服务承载；本仓库不实现上传后台或模型预览。
+- 小程序 PDF 点击后下载临时文件并调用 `openDocument`，显示保存/转发菜单；实际保存能力需真机验证。下载失败、HTTP 非 200 或打开失败均显示重试。
+- 小程序模型复制稳定商品资料页 `/store/products/{slug}#product-resources`，不复制临时签名下载地址。
+- 小程序站点来源通过构建变量 `TARO_APP_STORE_URL` 配置，默认 `https://www.hitbot.cc`。正式资源域名必须为 HTTPS，并由小程序运营方配置到 `downloadFile` 合法域名；重定向涉及的域名也需核对。
+- 当前示例资料在 `public/resources/examples/`：S622 展示手册和模型，EMG-4 展示仅手册，其余商品演示无资料状态。STP 为明确标记的 10 mm 示例方块，不是产品 CAD。
+
 ---
 
 ## 3. 方案清单 / BOM

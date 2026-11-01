@@ -4,6 +4,7 @@ export type {
   PartClass,
   Product,
   ProductCategory,
+  ProductResource,
   ProductSelection,
   ProductSpec,
   Stock,

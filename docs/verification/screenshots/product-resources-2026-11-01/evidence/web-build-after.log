@@ -1,0 +1,62 @@
+$ next build
+   ▲ Next.js 15.5.19
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 11.6s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/39) ...
+   Generating static pages (9/39)
+   Generating static pages (19/39)
+   Generating static pages (29/39)
+ ✓ Generating static pages (39/39)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+┌ ○ /_not-found                            121 B         102 kB
+├ ● /[locale]                              170 B         118 kB
+├   ├ /zh
+├   └ /en
+├ ● /[locale]/account                      197 B         192 kB
+├   ├ /zh/account
+├   └ /en/account
+├ ● /[locale]/checkout                     22 kB         191 kB
+├   ├ /zh/checkout
+├   └ /en/checkout
+├ ● /[locale]/design-system              1.17 kB         192 kB
+├   ├ /zh/design-system
+├   └ /en/design-system
+├ ● /[locale]/enterprise/apply           2.87 kB         141 kB
+├   ├ /zh/enterprise/apply
+├   └ /en/enterprise/apply
+├ ƒ /[locale]/join/[token]               3.59 kB         148 kB
+├ ● /[locale]/login                      3.91 kB         149 kB
+├   ├ /zh/login
+├   └ /en/login
+├ ● /[locale]/orders                     4.41 kB         196 kB
+├   ├ /zh/orders
+├   └ /en/orders
+├ ƒ /[locale]/orders/[orderNo]           3.01 kB         195 kB
+├ ● /[locale]/products                   3.89 kB         168 kB
+├   ├ /zh/products
+├   └ /en/products
+├ ● /[locale]/products/[slug]              334 B         237 kB
+├   ├ /zh/products/z-emg-4
+├   ├ /zh/products/z-efg-8s
+├   ├ /zh/products/z-efg-20
+├   └ [+15 more paths]
+└ ● /[locale]/try-os                      138 kB         265 kB
+    ├ /zh/try-os
+    └ /en/try-os
++ First Load JS shared by all             102 kB
+  ├ chunks/299-95c42be4f854b7f0.js       46.2 kB
+  ├ chunks/f5e4f263-0ba6e9a98fc1a3e7.js  54.2 kB
+  └ other shared chunks (total)          1.92 kB
+
+
+ƒ Middleware                             96.3 kB
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand

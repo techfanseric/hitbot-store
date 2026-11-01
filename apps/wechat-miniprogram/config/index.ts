@@ -14,6 +14,9 @@ const config: UserConfigExport = {
   sourceRoot: 'src',
   outputRoot: 'dist',
   framework: 'react',
+  defineConstants: {
+    HITBOT_STORE_URL: JSON.stringify(process.env.TARO_APP_STORE_URL || 'https://www.hitbot.cc'),
+  },
   compiler: 'webpack5',
   cache: {
     enable: false,
